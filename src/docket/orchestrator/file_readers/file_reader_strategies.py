@@ -46,7 +46,16 @@ class GlueScriptStrategy(FileReaderStrategy[AwsGlueJobSelect]):
     def __init__(self, aws_s3_objects: AwsS3ObjectClient) -> None:
         self.aws_s3_objects = aws_s3_objects
 
-    def _get_uris(self, record: AwsGlueJobSelect) -> list[str]:
+    def get_uris(self, record: AwsGlueJobSelect) -> list[str]:
+        """
+        Return the s3 uris a glue job runs: its script plus any extra py files.
+
+        Args:
+            record: glue job as read from AWS
+
+        Returns:
+            The job's artifact uris, in script-then-extras order
+        """
         command = decode_column(AwsGlueJobModel, record, "command")
         arguments = decode_column(AwsGlueJobModel, record, "default_arguments")
         uris = [command.get(SCRIPT_LOCATION_KEY) if isinstance(command, dict) else None]
@@ -56,7 +65,7 @@ class GlueScriptStrategy(FileReaderStrategy[AwsGlueJobSelect]):
 
     def get_source_files(self, record: AwsGlueJobSelect) -> list[SourceFile]:
         sources = []
-        for uri in self._get_uris(record):
+        for uri in self.get_uris(record):
             if not is_source_path(uri):
                 logger.info("skipping %s, not a python or sql file", uri)
                 continue
