@@ -22,8 +22,14 @@ from .catalog_databases import MODELS as CATALOG_DATABASE_MODELS
 from .catalog_databases import CatalogDatabaseClient
 from .catalog_job_artifacts import MODELS as CATALOG_JOB_ARTIFACT_MODELS
 from .catalog_job_artifacts import CatalogJobArtifactClient
+from .catalog_job_extractions import MODELS as CATALOG_JOB_EXTRACTION_MODELS
+from .catalog_job_extractions import CatalogJobExtractionClient
+from .catalog_job_table_edges import MODELS as CATALOG_JOB_TABLE_EDGE_MODELS
+from .catalog_job_table_edges import CatalogJobTableEdgeClient
 from .catalog_jobs import MODELS as CATALOG_JOB_MODELS
 from .catalog_jobs import CatalogJobClient
+from .catalog_table_join_edges import MODELS as CATALOG_TABLE_JOIN_EDGE_MODELS
+from .catalog_table_join_edges import CatalogTableJoinEdgeClient
 from .catalog_tables import MODELS as CATALOG_TABLE_MODELS
 from .catalog_tables import CatalogTableClient
 
@@ -39,6 +45,9 @@ ALL_MODELS = [
     *CATALOG_TABLE_MODELS,
     *CATALOG_JOB_MODELS,
     *CATALOG_JOB_ARTIFACT_MODELS,
+    *CATALOG_JOB_EXTRACTION_MODELS,
+    *CATALOG_JOB_TABLE_EDGE_MODELS,
+    *CATALOG_TABLE_JOIN_EDGE_MODELS,
 ]
 
 
@@ -182,6 +191,9 @@ class DB:
             "catalog_databases": CatalogDatabaseClient(self.conn),
             "catalog_jobs": CatalogJobClient(self.conn),
             "catalog_job_artifacts": CatalogJobArtifactClient(self.conn),
+            "catalog_job_extractions": CatalogJobExtractionClient(self.conn),
+            "catalog_job_table_edges": CatalogJobTableEdgeClient(self.conn),
+            "catalog_table_join_edges": CatalogTableJoinEdgeClient(self.conn),
             "catalog_tables": CatalogTableClient(self.conn),
         }
 
