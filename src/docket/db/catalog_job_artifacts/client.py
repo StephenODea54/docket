@@ -45,8 +45,8 @@ class CatalogJobArtifactClient:
 
         Args:
             records: Rows referencing metadata about lambda and glue jobs.
-                Glue rows use s3 uri and etag, lambda rows use function arn
-                and code sha as location and cache_key
+                Glue rows use the script s3 uri as reference, lambda rows
+                use the function arn
 
         Returns:
             The inserted rows
@@ -63,11 +63,11 @@ class CatalogJobArtifactClient:
 
     def get_artifacts(self) -> list[CatalogJobArtifactSelect]:
         """
-        Get all job artifact records, ordered by location.
+        Get all job artifact records, ordered by reference.
 
         Returns:
             list[CatalogJobArtifactSelect]
         """
-        result = CatalogJobArtifactModel.query().orderBy("location").to_dicts()
+        result = CatalogJobArtifactModel.query().orderBy("reference").to_dicts()
         logger.info("retrieved %s artifact(s) from catalog_job_artifacts", len(result))
         return cast(list[CatalogJobArtifactSelect], result)
