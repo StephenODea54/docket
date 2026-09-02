@@ -1,0 +1,26 @@
+# Ignore everything
+*
+
+# But descend into directories
+!*/
+
+# But still exclude generated folders
+__pycache__/
+*.egg-info
+*.py[oc]
+.venv
+build/
+dist/
+wheels/
+
+# And permit certain files
+!.gitignore
+!.pre-commit-config.yaml
+!.python-version
+!LICENSE
+!py.typed
+
+# And file types
+!*.md
+!*.py
+!*.toml

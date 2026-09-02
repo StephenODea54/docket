@@ -1,0 +1,14 @@
+[project]
+name = "docket"
+version = "0.1.0"
+description = "TODO"
+readme = "README.md"
+authors = [
+    { name = "Stephen O'Dea", email = "odeastephen1@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.8.13,<0.9.0"]
+build-backend = "uv_build"
