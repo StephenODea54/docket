@@ -124,8 +124,12 @@ class DB:
         self, db_path: str | Path = "docket.db", profile: str | None = None
     ) -> None:
         self.conn = _connect(db_path=db_path, profile=profile)
-        self.aws_glue_databases = AwsGlueDatabaseClient(self.conn)
-        self.catalog_databases = CatalogDatabaseClient(self.conn)
+        self.clients = {
+            "aws_glue_databases": AwsGlueDatabaseClient(self.conn),
+            "aws_glue_tables": AwsGlueTableClient(self.conn),
+            "catalog_databases": CatalogDatabaseClient(self.conn),
+            "catalog_tables": CatalogTableClient(self.conn),
+        }
 
     def migrate(self) -> list[str]:
         """Diff the database against every registered model and apply the changes."""
