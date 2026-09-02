@@ -12,6 +12,7 @@ def decode_column(model: type[Model], row: Mapping[str, Any], column: str) -> An
     Args:
         model: generic sustained Model
         row: generic dict
+        column: column name to decode
 
     Returns:
         decoded representation of the row (any).
