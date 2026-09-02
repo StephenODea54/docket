@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import ClassVar, TypedDict
 
 from sustained import Model
 from sustained.schema import (
@@ -10,6 +10,31 @@ from sustained.schema import (
     Text,
     Timestamp,
 )
+
+
+class AwsGlueTableSelect(TypedDict):
+    name: str | None
+    database_name: str | None
+    catalog_id: str | None
+    description: str | None
+    owner: str | None
+    table_type: str | None
+    created_by: str | None
+    version_id: str | None
+    retention: int | None
+    is_registered_with_lake_formation: bool | None
+    create_time: str | None
+    update_time: str | None
+    last_access_time: str | None
+    last_analyzed_time: str | None
+    view_original_text: str | None
+    view_expanded_text: str | None
+    parameters: str | None
+    partition_keys: str | None
+    storage_descriptor: str | None
+    federated_table: str | None
+    target_table: str | None
+    lf_tags: str | None
 
 
 class AwsGlueTableModel(Model):

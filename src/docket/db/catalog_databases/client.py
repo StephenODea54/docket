@@ -1,12 +1,13 @@
 import sqlite3
 from collections.abc import Sequence
+from typing import cast
 from uuid import uuid4
 
 from sustained import QueryBuilder
 
 from ...config.logger import get_logger
-from ..aws_glue_databases import AwsGlueDatabaseModel
-from .models import CatalogDatabaseModel
+from ..aws_glue_databases import AwsGlueDatabaseSelect
+from .models import CatalogDatabaseModel, CatalogDatabaseSelect
 
 logger = get_logger("catalog_databases")
 
@@ -33,40 +34,38 @@ class CatalogDatabaseClient:
         )
         logger.info("deleted %s database(s) from catalog_databases", count)
 
-    def insert_databases(self, records: Sequence[AwsGlueDatabaseModel]) -> int:
+    def insert_databases(
+        self, records: Sequence[AwsGlueDatabaseSelect]
+    ) -> list[CatalogDatabaseSelect]:
         """
         Insert glue database records.
 
         Args:
-            records: Glue databases as read from AWS
+            records: Glue databases rows
 
         Returns:
-            Number of rows inserted
+            The inserted rows
 
         Raises:
             ValueError: if records is empty
         """
         if not records:
             raise ValueError("records must not be empty")
-        columns = AwsGlueDatabaseModel.tableColumns
-        rows = [
-            {
-                "id": str(uuid4()),
-                **{column: getattr(record, column) for column in columns},
-            }
-            for record in records
-        ]
-        count = CatalogDatabaseModel.query().insert(rows).run()
-        logger.info("inserted %s database(s) into catalog_databases", count)
-        return count
+        rows = [{"id": str(uuid4()), **record} for record in records]
+        result = CatalogDatabaseModel.query().insert(rows).returning().run()
+        logger.info("inserted %s database(s) into catalog_databases", len(result))
+        return cast(list[CatalogDatabaseSelect], result)
 
-    def get_databases(self) -> list[CatalogDatabaseModel]:
+    def get_databases(self) -> list[CatalogDatabaseSelect]:
         """
         Get all glue database records, ordered by name.
 
+        Args:
+            None
+
         Returns:
-            list[CatalogDatabaseModel]
+            list[CatalogDatabaseSelect]
         """
-        result = CatalogDatabaseModel.query().orderBy("name").run()
+        result = CatalogDatabaseModel.query().orderBy("name").to_dicts()
         logger.info("retrieved %s database(s) from catalog_databases", len(result))
-        return result
+        return cast(list[CatalogDatabaseSelect], result)

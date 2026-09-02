@@ -1,7 +1,16 @@
-from typing import ClassVar
+from typing import ClassVar, TypedDict
 
 from sustained import Model
 from sustained.schema import ColumnDef, String, Timestamp
+
+
+class AwsGlueDatabaseSelect(TypedDict):
+    name: str | None
+    arn: str | None
+    catalog_id: str | None
+    description: str | None
+    location_uri: str | None
+    create_time: str | None
 
 
 class AwsGlueDatabaseModel(Model):

@@ -1,7 +1,27 @@
-from typing import ClassVar
+from datetime import datetime
+from typing import ClassVar, TypedDict
 
 from sustained import Model
 from sustained.schema import ColumnDef, String, Timestamp
+
+
+class CatalogDatabaseSelect(TypedDict):
+    id: str
+    name: str
+    arn: str | None
+    catalog_id: str | None
+    description: str | None
+    location_uri: str | None
+    create_time: str | None
+
+
+class CatalogDatabaseInsert(TypedDict):
+    name: str
+    arn: str | None
+    catalog_id: str | None
+    description: str | None
+    location_uri: str | None
+    create_time: datetime | str | None
 
 
 class CatalogDatabaseModel(Model):
