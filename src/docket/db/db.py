@@ -5,16 +5,24 @@ import sqlite3
 import sys
 import tarfile
 import urllib.request
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 from sustained import Model
 from sustained.migrations import Migrator
+from sustained.types import Connection
 
 from ..config import get_logger
 from .aws_glue_databases import AwsGlueDatabaseClient
+from .aws_glue_jobs import AwsGlueJobClient
 from .aws_glue_tables import AwsGlueTableClient
+from .aws_lambda_functions import AwsLambdaFunctionClient
 from .catalog_databases import MODELS as CATALOG_DATABASE_MODELS
 from .catalog_databases import CatalogDatabaseClient
+from .catalog_job_artifacts import MODELS as CATALOG_JOB_ARTIFACT_MODELS
+from .catalog_job_artifacts import CatalogJobArtifactClient
+from .catalog_jobs import MODELS as CATALOG_JOB_MODELS
+from .catalog_jobs import CatalogJobClient
 from .catalog_tables import MODELS as CATALOG_TABLE_MODELS
 from .catalog_tables import CatalogTableClient
 
@@ -25,15 +33,32 @@ DARWIN_ARM64_VERSION = "v1.29.0"
 
 _MACHINES = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}
 
-ALL_MODELS = [*CATALOG_DATABASE_MODELS, *CATALOG_TABLE_MODELS]
+ALL_MODELS = [
+    *CATALOG_DATABASE_MODELS,
+    *CATALOG_TABLE_MODELS,
+    *CATALOG_JOB_MODELS,
+    *CATALOG_JOB_ARTIFACT_MODELS,
+]
 
 
 class UnsupportedPlatformError(RuntimeError):
     """Raised when no steampipe extension build exists for this platform."""
 
 
-def _platform_key() -> str:
-    """Return the steampipe release asset key for the current OS and architecture."""
+def _get_platform_key() -> str:
+    """
+    Return the steampipe release asset key for the current OS and architecture.
+
+    Args:
+        None
+
+    Returns:
+        plaform key
+
+    Raises:
+        UnsupportedPlatformError if steampipe is not compatible with the machine
+        running it.
+    """
     machine = _MACHINES.get(platform.machine().lower())
     if machine is None:
         raise UnsupportedPlatformError(platform.machine())
@@ -44,36 +69,58 @@ def _platform_key() -> str:
     raise UnsupportedPlatformError(sys.platform)
 
 
-def _extension_version(key: str) -> str:
+def _get_extension_version(key: str) -> str:
     """
-    Return the pinned plugin version for a platform key.
+    Returns the pinned plugin version for a platform key.
 
     darwin_arm64 is pinned to v1.29.0 because upstream stopped publishing
     that build in later releases.
+
+    Args:
+        key: platform key for steampipe, depending on the machine
+
+    Returns:
+        the steampipe plugin version
     """
     return DARWIN_ARM64_VERSION if key == "darwin_arm64" else DEFAULT_VERSION
 
 
 def _extension_path() -> Path:
-    """Return the local cache path for the steampipe sqlite extension."""
-    key = _platform_key()
+    """
+    Return the local cache path for the steampipe sqlite extension.
+
+    Args:
+        None
+
+    Returns:
+        The path of the steampipe extension
+    """
+    key = _get_platform_key()
     return (
         Path.home()
         / ".docket"
         / "steampipe"
-        / _extension_version(key)
+        / _get_extension_version(key)
         / key
         / "steampipe_sqlite_aws.so"
     )
 
 
-def ensure_extension() -> Path:
-    """Download and cache the steampipe sqlite AWS extension, returning its path."""
+def _download_steampipe_extension() -> Path:
+    """
+    Downloads and caches the steampipe sqlite AWS extension, returning its path.
+
+    Args:
+        None
+
+    Returns:
+        The path of the unzipped steampipe extension
+    """
     path = _extension_path()
     if path.exists():
         return path
-    key = _platform_key()
-    version = _extension_version(key)
+    key = _get_platform_key()
+    version = _get_extension_version(key)
     url = (
         "https://github.com/turbot/steampipe-plugin-aws/releases/download/"
         f"{version}/steampipe_sqlite_aws.{key}.tar.gz"
@@ -108,11 +155,12 @@ def _connect(
     Returns:
         sqlite3.Connection
     """
-    extension = ensure_extension()
+    extension = _download_steampipe_extension()
     conn = sqlite3.connect(str(db_path))
     conn.enable_load_extension(True)
     conn.load_extension(str(extension))
     conn.enable_load_extension(False)
+    conn.execute("pragma foreign_keys = on")
     if profile:
         conn.execute("select steampipe_configure_aws(?)", (f'profile = "{profile}"',))
     Model.bind(conn)
@@ -126,15 +174,40 @@ class DB:
         self.conn = _connect(db_path=db_path, profile=profile)
         self.clients = {
             "aws_glue_databases": AwsGlueDatabaseClient(self.conn),
+            "aws_glue_jobs": AwsGlueJobClient(self.conn),
             "aws_glue_tables": AwsGlueTableClient(self.conn),
+            "aws_lambda_functions": AwsLambdaFunctionClient(self.conn),
             "catalog_databases": CatalogDatabaseClient(self.conn),
+            "catalog_jobs": CatalogJobClient(self.conn),
+            "catalog_job_artifacts": CatalogJobArtifactClient(self.conn),
             "catalog_tables": CatalogTableClient(self.conn),
         }
 
     def migrate(self) -> list[str]:
-        """Diff the database against every registered model and apply the changes."""
+        """
+        Diff the database against every registered model and apply the changes.
+
+        Args:
+            None
+
+        Returns:
+            The ids of the migrations that were applied; empty if up to date
+        """
         return Migrator(self.conn, []).up(models=ALL_MODELS)
 
-    def transaction(self):
-        """Open a sustained transaction block; nested blocks become savepoints."""
+    def transaction(self) -> AbstractContextManager[Connection]:
+        """
+        Open a sustained transaction block.
+
+        Usage:
+            db = DB(...)
+            with db.transaction:
+                ...
+
+        Args:
+            None
+
+        Returns:
+            The sustained transaction
+        """
         return Model.transaction()
