@@ -12,8 +12,11 @@ from sustained.migrations import Migrator
 
 from ..config import get_logger
 from .aws_glue_databases import AwsGlueDatabaseClient
+from .aws_glue_tables import AwsGlueTableClient
 from .catalog_databases import MODELS as CATALOG_DATABASE_MODELS
 from .catalog_databases import CatalogDatabaseClient
+from .catalog_tables import MODELS as CATALOG_TABLE_MODELS
+from .catalog_tables import CatalogTableClient
 
 logger = get_logger("db")
 
@@ -22,7 +25,7 @@ DARWIN_ARM64_VERSION = "v1.29.0"
 
 _MACHINES = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}
 
-ALL_MODELS = [*CATALOG_DATABASE_MODELS]
+ALL_MODELS = [*CATALOG_DATABASE_MODELS, *CATALOG_TABLE_MODELS]
 
 
 class UnsupportedPlatformError(RuntimeError):
