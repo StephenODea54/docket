@@ -11,6 +11,7 @@ from .file_readers import (
     LambdaPackageStrategy,
     SourceFile,
 )
+from .run import run
 
 __all__ = [
     "EdgeExtractorStrategy",
@@ -21,5 +22,6 @@ __all__ = [
     "LambdaPackageStrategy",
     "LlmEdgeExtractor",
     "SourceFile",
+    "run",
     "sync_job_edges",
 ]
