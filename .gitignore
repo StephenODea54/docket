@@ -19,6 +19,7 @@ wheels/
 !.python-version
 !LICENSE
 !py.typed
+!uv.lock
 
 # And file types
 !*.md
