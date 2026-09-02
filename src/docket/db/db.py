@@ -17,6 +17,7 @@ from .aws_glue_databases import AwsGlueDatabaseClient
 from .aws_glue_jobs import AwsGlueJobClient
 from .aws_glue_tables import AwsGlueTableClient
 from .aws_lambda_functions import AwsLambdaFunctionClient
+from .aws_s3_objects import AwsS3ObjectClient
 from .catalog_databases import MODELS as CATALOG_DATABASE_MODELS
 from .catalog_databases import CatalogDatabaseClient
 from .catalog_job_artifacts import MODELS as CATALOG_JOB_ARTIFACT_MODELS
@@ -177,6 +178,7 @@ class DB:
             "aws_glue_jobs": AwsGlueJobClient(self.conn),
             "aws_glue_tables": AwsGlueTableClient(self.conn),
             "aws_lambda_functions": AwsLambdaFunctionClient(self.conn),
+            "aws_s3_objects": AwsS3ObjectClient(self.conn),
             "catalog_databases": CatalogDatabaseClient(self.conn),
             "catalog_jobs": CatalogJobClient(self.conn),
             "catalog_job_artifacts": CatalogJobArtifactClient(self.conn),
