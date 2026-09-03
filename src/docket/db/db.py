@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import platform
 import sqlite3
 import sys
@@ -13,6 +14,7 @@ from sustained.migrations import Migrator
 from sustained.types import Connection
 
 from ..config import get_logger
+from ..config.env import env
 from .aws_glue_databases import AwsGlueDatabaseClient
 from .aws_glue_jobs import AwsGlueJobClient
 from .aws_glue_tables import AwsGlueTableClient
@@ -152,27 +154,57 @@ def _download_steampipe_extension() -> Path:
     return path
 
 
+def _build_aws_config(profile: str | None) -> str | None:
+    """
+    Render the steampipe aws config from the profile and DOCKET_AWS_REGIONS.
+
+    DOCKET_AWS_REGIONS is a comma separated list of regions; when unset,
+    steampipe scans every region.
+
+    Args:
+        profile: aws profile name
+
+    Returns:
+        The config document, or None when there is nothing to configure
+    """
+    options = []
+    if profile:
+        options.append(f'profile = "{profile}"')
+    names = env.aws_regions
+    if names:
+        rendered = ", ".join(f'"{name}"' for name in names)
+        options.append(f"regions = [{rendered}]")
+    return "\n".join(options) if options else None
+
+
 def _connect(
     db_path: str | Path = "docket.db", profile: str | None = None
 ) -> sqlite3.Connection:
     """
-    Open the docket database with the steampipe extension loaded
+    Open the docket database with the steampipe extension loaded.
+
+    Disables the plugin query cache unless STEAMPIPE_CACHE is already set;
+    large results (s3 object bodies) overflow its shards and poison
+    subsequent reads.
 
     Args:
         db_path: path to the sqlite file
-        profile: aws profile name
+        profile: aws profile name; falls back to DOCKET_AWS_PROFILE
 
     Returns:
         sqlite3.Connection
     """
     extension = _download_steampipe_extension()
+    os.environ.setdefault("STEAMPIPE_CACHE", "false")
+    profile = profile or env.aws_profile
     conn = sqlite3.connect(str(db_path))
     conn.enable_load_extension(True)
     conn.load_extension(str(extension))
     conn.enable_load_extension(False)
     conn.execute("pragma foreign_keys = on")
-    if profile:
-        conn.execute("select steampipe_configure_aws(?)", (f'profile = "{profile}"',))
+    config = _build_aws_config(profile)
+    if config:
+        conn.execute("select steampipe_configure_aws(?)", (config,))
     Model.bind(conn)
     return conn
 
