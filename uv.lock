@@ -389,9 +389,11 @@ name = "docket"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "boto3" },
     { name = "litellm" },
     { name = "pydantic" },
     { name = "sustained" },
+    { name = "tenacity" },
 ]
 
 [package.dev-dependencies]
@@ -401,9 +403,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boto3", specifier = ">=1.43.86" },
     { name = "litellm", specifier = ">=1.99.0" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "sustained", specifier = ">=2.23.1" },
+    { name = "tenacity", specifier = ">=9.1.4" },
 ]
 
 [package.metadata.requires-dev]
@@ -1740,6 +1744,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/1f/d5/a18ed5fda86e0c3d7c9cf9a6eb41519c4bbfd8a1fa721f51e1c22a184805/sustained-2.23.1.tar.gz", hash = "sha256:7ded0d16aad3f6d0c651c3533a0278036ec88231aa29a025489c3d59200cf809", size = 435687, upload-time = "2026-08-20T21:20:57.069Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e2/e7/f9ecb4c1d02672c7b0532b5ee4b73ae275da2b8fbe2793d664a681470bc8/sustained-2.23.1-py3-none-any.whl", hash = "sha256:52c2172deee06c2b9f47a74113cb97c91950628d5488ad1cfe7689df16ec475a", size = 173983, upload-time = "2026-08-20T21:20:56.112Z" },
+]
+
+[[package]]
+name = "tenacity"
+version = "9.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697ee8a44d3d69222b344920433d3b6666ccd9b374630c/tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a", size = 49413, upload-time = "2026-02-07T10:45:33.841Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926, upload-time = "2026-02-07T10:45:32.24Z" },
 ]
 
 [[package]]

@@ -8,9 +8,11 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "boto3>=1.43.86",
     "litellm>=1.99.0",
     "pydantic>=2.13.5",
     "sustained>=2.23.1",
+    "tenacity>=9.1.4",
 ]
 
 [build-system]
