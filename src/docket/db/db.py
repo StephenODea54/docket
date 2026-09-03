@@ -154,32 +154,28 @@ def _download_steampipe_extension() -> Path:
     return path
 
 
-def _build_aws_config(profile: str | None) -> str | None:
+def _build_aws_config() -> str | None:
     """
-    Render the steampipe aws config from the profile and DOCKET_AWS_REGIONS.
+    Render the steampipe aws config from DOCKET_AWS_REGIONS.
 
     DOCKET_AWS_REGIONS is a comma separated list of regions; when unset,
-    steampipe scans every region.
+    steampipe scans every region. The profile comes from the standard
+    AWS_PROFILE environment variable, which the AWS SDK reads natively.
 
     Args:
-        profile: aws profile name
+        None
 
     Returns:
         The config document, or None when there is nothing to configure
     """
-    options = []
-    if profile:
-        options.append(f'profile = "{profile}"')
     names = env.aws_regions
-    if names:
-        rendered = ", ".join(f'"{name}"' for name in names)
-        options.append(f"regions = [{rendered}]")
-    return "\n".join(options) if options else None
+    if not names:
+        return None
+    rendered = ", ".join(f'"{name}"' for name in names)
+    return f"regions = [{rendered}]"
 
 
-def _connect(
-    db_path: str | Path = "docket.db", profile: str | None = None
-) -> sqlite3.Connection:
+def _connect(db_path: str | Path = "docket.db") -> sqlite3.Connection:
     """
     Open the docket database with the steampipe extension loaded.
 
@@ -189,20 +185,18 @@ def _connect(
 
     Args:
         db_path: path to the sqlite file
-        profile: aws profile name; falls back to DOCKET_AWS_PROFILE
 
     Returns:
         sqlite3.Connection
     """
     extension = _download_steampipe_extension()
     os.environ.setdefault("STEAMPIPE_CACHE", "false")
-    profile = profile or env.aws_profile
     conn = sqlite3.connect(str(db_path))
     conn.enable_load_extension(True)
     conn.load_extension(str(extension))
     conn.enable_load_extension(False)
     conn.execute("pragma foreign_keys = on")
-    config = _build_aws_config(profile)
+    config = _build_aws_config()
     if config:
         conn.execute("select steampipe_configure_aws(?)", (config,))
     Model.bind(conn)
@@ -210,16 +204,17 @@ def _connect(
 
 
 class DB:
-    def __init__(
-        self, db_path: str | Path = "docket.db", profile: str | None = None
-    ) -> None:
-        self.conn = _connect(db_path=db_path, profile=profile)
+    def __init__(self, db_path: str | Path = "docket.db") -> None:
+        regions = env.aws_regions
+        self.conn = _connect(db_path=db_path)
         self.clients = {
             "aws_glue_databases": AwsGlueDatabaseClient(self.conn),
             "aws_glue_jobs": AwsGlueJobClient(self.conn),
             "aws_glue_tables": AwsGlueTableClient(self.conn),
             "aws_lambda_functions": AwsLambdaFunctionClient(self.conn),
-            "aws_s3_objects": AwsS3ObjectClient(self.conn),
+            "aws_s3_objects": AwsS3ObjectClient(
+                region=regions[0] if regions else None
+            ),
             "catalog_databases": CatalogDatabaseClient(self.conn),
             "catalog_jobs": CatalogJobClient(self.conn),
             "catalog_job_artifacts": CatalogJobArtifactClient(self.conn),

@@ -1,6 +1,5 @@
 import os
 
-AWS_PROFILE = "DOCKET_AWS_PROFILE"
 AWS_REGIONS = "DOCKET_AWS_REGIONS"
 LLM_API_KEY = "DOCKET_LLM_API_KEY"
 LLM_MODEL = "DOCKET_LLM_MODEL"
@@ -14,11 +13,6 @@ class Env:
     Values are read from os.environ on each access, so .env files loaded
     at the app edge and test monkeypatching both take effect.
     """
-
-    @property
-    def aws_profile(self) -> str | None:
-        """The AWS profile name from DOCKET_AWS_PROFILE, or None when unset."""
-        return os.environ.get(AWS_PROFILE)
 
     @property
     def aws_regions(self) -> list[str]:
