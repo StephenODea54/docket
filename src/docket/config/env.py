@@ -2,6 +2,7 @@ import os
 
 AWS_REGIONS = "DOCKET_AWS_REGIONS"
 LLM_API_KEY = "DOCKET_LLM_API_KEY"
+LLM_CONCURRENCY = "DOCKET_LLM_CONCURRENCY"
 LLM_MODEL = "DOCKET_LLM_MODEL"
 LLM_WORKSPACE_ID = "DOCKET_LLM_WORKSPACE_ID"
 LOG_LEVEL = "DOCKET_LOG_LEVEL"
@@ -35,6 +36,16 @@ class Env:
         variables (e.g. AWS credentials for bedrock) leave it unset or empty.
         """
         return os.environ.get(LLM_API_KEY) or None
+
+    @property
+    def llm_concurrency(self) -> int:
+        """
+        Parallel extraction calls from DOCKET_LLM_CONCURRENCY; defaults to 8.
+
+        Values that are not positive integers fall back to the default.
+        """
+        value = os.environ.get(LLM_CONCURRENCY, "")
+        return int(value) if value.isdigit() and int(value) > 0 else 8
 
     @property
     def llm_model(self) -> str | None:

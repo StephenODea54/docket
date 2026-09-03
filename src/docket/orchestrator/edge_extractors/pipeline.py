@@ -1,8 +1,10 @@
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from sustained import Model
 
+from ...config.env import env
 from ...config.logger import get_logger
 from ...db.catalog_job_extractions import (
     CatalogJobExtractionClient,
@@ -151,14 +153,27 @@ def sync_job_edges(
         logger.info("all %s job(s) cached, nothing to extract", len(jobs))
         return []
 
+    def extract_one(item: tuple[CatalogJobSelect, list[SourceFile], str]) -> JobEdges:
+        """
+        Extract one stale job's edges; runs on a worker thread.
+
+        Args:
+            item: the job, its source files, and its cache key
+
+        Returns:
+            The job's extracted edges
+        """
+        job, sources, _ = item
+        logger.info("extracting edges from %s", job["name"])
+        return _drop_unanchored_join_edges(job["name"], extractor.extract(job, sources))
+
+    with ThreadPoolExecutor(max_workers=env.llm_concurrency) as pool:
+        extracted = list(pool.map(extract_one, stale))
+
     extraction_rows: list[CatalogJobExtractionInsert] = []
     table_edge_rows: list[CatalogJobTableEdgeInsert] = []
     join_edge_rows: list[CatalogTableJoinEdgeInsert] = []
-    for job, sources, cache_key in stale:
-        logger.info("extracting edges from %s", job["name"])
-        edges = _drop_unanchored_join_edges(
-            job["name"], extractor.extract(job, sources)
-        )
+    for (job, sources, cache_key), edges in zip(stale, extracted):
         extraction_rows.append(
             {
                 "job_id": job["id"],
