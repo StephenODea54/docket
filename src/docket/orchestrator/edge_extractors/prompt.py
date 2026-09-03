@@ -9,9 +9,10 @@ SYSTEM_PROMPT = """\
 You are a static analyzer for AWS ETL code. You are given the source files of \
 one job (a Glue script or Lambda package). Extract only what the code evidences:
 
-- table_edges: tables/datasets the code reads or writes (Glue catalog reads, \
-spark.sql, Athena queries, boto3 get_table, JDBC reads, writes/overwrites to \
-catalog tables or their S3 locations). direction is "read" or "write".
+- table_edges: data warehouse tables the code reads or writes (Glue catalog \
+reads, spark.sql, Athena queries, boto3 get_table, JDBC reads, \
+writes/overwrites to catalog tables or their S3 locations). direction is \
+"read" or "write".
 - join_edges: column-level relationships between two tables: SQL JOIN ... ON \
 predicates, DataFrame .join(on=...) keys, pandas merge(left_on=/right_on=/on=) \
 keys, or equality filters that relate a column of one table to a column of \
@@ -20,6 +21,12 @@ another.
 Rules:
 - Report only what appears in the code. Every edge must include a short \
 verbatim evidence snippet quoting the line(s) it came from.
+- Only SQL-addressable warehouse tables belong in table_edges. Never report \
+DynamoDB or other key-value tables, raw s3 object paths, queues, topics, or \
+external service objects (e.g. Salesforce sobjects, REST endpoints).
+- Every join between two reported tables must also appear in join_edges: SQL \
+JOINs in the same queries you cite for table_edges, merges, and equality \
+filters all count.
 - If a name is built at runtime (job arguments, environment variables, \
 f-strings), set is_dynamic=true and give the best static approximation of the \
 name.
