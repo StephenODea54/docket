@@ -32,17 +32,24 @@ class EdgeExtractorStrategy(ABC):
 
 
 class LlmEdgeExtractor(EdgeExtractorStrategy):
-    def __init__(self, model: str, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+        workspace_id: str | None = None,
+    ) -> None:
         self.model = model
         self.api_key = api_key
+        self.workspace_id = workspace_id
 
     @classmethod
     def from_env(cls) -> LlmEdgeExtractor:
         """
-        Build an extractor from DOCKET_LLM_MODEL and DOCKET_LLM_API_KEY.
+        Build an extractor from the DOCKET_LLM_* environment variables.
 
         DOCKET_LLM_API_KEY is optional; providers authenticated through their
         own environment variables (e.g. AWS credentials for bedrock) omit it.
+        DOCKET_LLM_WORKSPACE_ID is required only by identity-linked keys.
 
         Args:
             None
@@ -56,7 +63,11 @@ class LlmEdgeExtractor(EdgeExtractorStrategy):
         model = env.llm_model
         if not model:
             raise ValueError(f"{LLM_MODEL} must be set")
-        return cls(model=model, api_key=env.llm_api_key)
+        return cls(
+            model=model,
+            api_key=env.llm_api_key,
+            workspace_id=env.llm_workspace_id,
+        )
 
     def _complete(self, messages: list[dict[str, str]]) -> str:
         """
@@ -70,11 +81,19 @@ class LlmEdgeExtractor(EdgeExtractorStrategy):
         """
         from litellm import completion
 
+        extra_headers = (
+            {"anthropic-workspace-id": self.workspace_id} if self.workspace_id else None
+        )
         response = completion(
             model=self.model,
             messages=messages,
             response_format=JobEdges,
             api_key=self.api_key,
+            num_retries=5,
+            extra_headers=extra_headers,
+            thinking={"type": "adaptive"},
+            max_tokens=16000,
+            drop_params=True,
         )
         return response.choices[0].message.content or ""
 
@@ -93,7 +112,16 @@ class LlmEdgeExtractor(EdgeExtractorStrategy):
             pydantic.ValidationError: if the retry output is also invalid
         """
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            },
             {"role": "user", "content": build_user_content(job, sources)},
         ]
         content = self._complete(messages)

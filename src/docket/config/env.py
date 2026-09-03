@@ -3,6 +3,7 @@ import os
 AWS_REGIONS = "DOCKET_AWS_REGIONS"
 LLM_API_KEY = "DOCKET_LLM_API_KEY"
 LLM_MODEL = "DOCKET_LLM_MODEL"
+LLM_WORKSPACE_ID = "DOCKET_LLM_WORKSPACE_ID"
 LOG_LEVEL = "DOCKET_LOG_LEVEL"
 
 
@@ -31,14 +32,23 @@ class Env:
         The LLM provider api key from DOCKET_LLM_API_KEY.
 
         Optional; providers authenticated through their own environment
-        variables (e.g. AWS credentials for bedrock) leave it unset.
+        variables (e.g. AWS credentials for bedrock) leave it unset or empty.
         """
-        return os.environ.get(LLM_API_KEY)
+        return os.environ.get(LLM_API_KEY) or None
 
     @property
     def llm_model(self) -> str | None:
         """The litellm model string from DOCKET_LLM_MODEL, or None when unset."""
         return os.environ.get(LLM_MODEL)
+
+    @property
+    def llm_workspace_id(self) -> str | None:
+        """
+        Workspace ID from DOCKET_LLM_WORKSPACE_ID.
+
+        Required by identity-linked API keys; workspace keys leave it unset.
+        """
+        return os.environ.get(LLM_WORKSPACE_ID) or None
 
     @property
     def log_level(self) -> str | None:
