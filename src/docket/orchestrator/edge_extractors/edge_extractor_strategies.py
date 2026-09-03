@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 
 from pydantic import ValidationError
 
+from ...config.env import LLM_MODEL, env
 from ...config.logger import get_logger
 from ...db.catalog_jobs import CatalogJobSelect
 from ..file_readers import SourceFile
@@ -12,9 +12,6 @@ from .models import JobEdges
 from .prompt import SYSTEM_PROMPT, build_user_content
 
 logger = get_logger("edge_extractors")
-
-MODEL_ENV_VAR = "DOCKET_LLM_MODEL"
-API_KEY_ENV_VAR = "DOCKET_LLM_API_KEY"
 
 
 class EdgeExtractorStrategy(ABC):
@@ -56,10 +53,10 @@ class LlmEdgeExtractor(EdgeExtractorStrategy):
         Raises:
             ValueError: if DOCKET_LLM_MODEL is not set
         """
-        model = os.environ.get(MODEL_ENV_VAR)
+        model = env.llm_model
         if not model:
-            raise ValueError(f"{MODEL_ENV_VAR} must be set")
-        return cls(model=model, api_key=os.environ.get(API_KEY_ENV_VAR))
+            raise ValueError(f"{LLM_MODEL} must be set")
+        return cls(model=model, api_key=env.llm_api_key)
 
     def _complete(self, messages: list[dict[str, str]]) -> str:
         """
