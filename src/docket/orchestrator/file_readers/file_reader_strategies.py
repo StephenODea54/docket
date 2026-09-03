@@ -8,7 +8,11 @@ from typing import Any, ClassVar, Generic, TypeVar
 
 from ...config.logger import get_logger
 from ...db.aws_glue_jobs import AwsGlueJobModel, AwsGlueJobSelect
-from ...db.aws_lambda_functions import AwsLambdaFunctionModel, AwsLambdaFunctionSelect
+from ...db.aws_lambda_functions import (
+    AwsLambdaFunctionClient,
+    AwsLambdaFunctionModel,
+    AwsLambdaFunctionSelect,
+)
 from ...db.aws_s3_objects import AwsS3ObjectClient
 from ...db.utils import decode_column
 from .filters import extract_zip_sources, is_source_path, parse_s3_uri
@@ -83,6 +87,42 @@ class GlueScriptStrategy(FileReaderStrategy[AwsGlueJobSelect]):
 class LambdaPackageStrategy(FileReaderStrategy[AwsLambdaFunctionSelect]):
     type: ClassVar[str] = "lambda"
 
+    def __init__(self, aws_lambda_functions: AwsLambdaFunctionClient) -> None:
+        self.aws_lambda_functions = aws_lambda_functions
+
+    def _get_location(self, record: AwsLambdaFunctionSelect) -> str | None:
+        """
+        Return a function's presigned code download url, if it has one.
+
+        Args:
+            record: lambda function as read from AWS
+
+        Returns:
+            The url, or None when the record carries no code location
+        """
+        code = decode_column(AwsLambdaFunctionModel, record, "code")
+        location = code.get("Location") if isinstance(code, dict) else None
+        return location or None
+
+    def _download(self, location: str) -> bytes | None:
+        """
+        Download a code package, returning None on failure.
+
+        Args:
+            location: presigned download url
+
+        Returns:
+            The package bytes, or None when the download fails
+        """
+        try:
+            with urllib.request.urlopen(
+                location, timeout=DOWNLOAD_TIMEOUT
+            ) as response:
+                return response.read()
+        except (urllib.error.URLError, TimeoutError) as error:
+            logger.warning("download failed: %s", error)
+            return None
+
     def get_source_files(self, record: AwsLambdaFunctionSelect) -> list[SourceFile]:
         if record["package_type"] != ZIP_PACKAGE_TYPE:
             logger.info(
@@ -91,18 +131,19 @@ class LambdaPackageStrategy(FileReaderStrategy[AwsLambdaFunctionSelect]):
                 record["package_type"],
             )
             return []
-        code = decode_column(AwsLambdaFunctionModel, record, "code")
-        location = code.get("Location") if isinstance(code, dict) else None
+        name = record["name"]
+        location = self._get_location(record)
         if not location:
-            logger.warning("function %s has no code location", record["name"])
+            logger.warning("function %s has no code location", name)
             return []
-        try:
-            with urllib.request.urlopen(
-                location, timeout=DOWNLOAD_TIMEOUT
-            ) as response:
-                data = response.read()
-        except (urllib.error.URLError, TimeoutError) as error:
-            logger.warning("failed to download %s: %s", record["name"], error)
+        data = self._download(location)
+        if data is None and name:
+            logger.info("refreshing code location for %s", name)
+            fresh = self.aws_lambda_functions.get_function(name)
+            location = self._get_location(fresh) if fresh else None
+            data = self._download(location) if location else None
+        if data is None:
+            logger.warning("giving up on %s", name)
             return []
         sources = extract_zip_sources(data)
         logger.info("read %s source file(s) from %s", len(sources), record["name"])

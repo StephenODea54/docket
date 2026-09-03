@@ -119,7 +119,7 @@ def run(db: DB, extractor: EdgeExtractorStrategy) -> list[str]:
     lambda_functions = db.clients["aws_lambda_functions"].get_functions()
 
     glue_scripts = GlueScriptStrategy(db.clients["aws_s3_objects"])
-    lambda_packages = LambdaPackageStrategy()
+    lambda_packages = LambdaPackageStrategy(db.clients["aws_lambda_functions"])
     sources: dict[JobKey, list[SourceFile]] = {}
     for record in glue_jobs:
         sources[("glue", record["name"])] = glue_scripts.get_source_files(record)
