@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class JobTableEdge(BaseModel):
@@ -22,5 +22,5 @@ class TableJoinEdge(BaseModel):
 
 
 class JobEdges(BaseModel):
-    table_edges: list[JobTableEdge]
-    join_edges: list[TableJoinEdge]
+    table_edges: list[JobTableEdge] = Field(default_factory=list)
+    join_edges: list[TableJoinEdge] = Field(default_factory=list)
