@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -95,8 +96,14 @@ class LambdaPackageStrategy(FileReaderStrategy[AwsLambdaFunctionSelect]):
         if not location:
             logger.warning("function %s has no code location", record["name"])
             return []
-        with urllib.request.urlopen(location, timeout=DOWNLOAD_TIMEOUT) as response:
-            data = response.read()
+        try:
+            with urllib.request.urlopen(
+                location, timeout=DOWNLOAD_TIMEOUT
+            ) as response:
+                data = response.read()
+        except (urllib.error.URLError, TimeoutError) as error:
+            logger.warning("failed to download %s: %s", record["name"], error)
+            return []
         sources = extract_zip_sources(data)
         logger.info("read %s source file(s) from %s", len(sources), record["name"])
         return sources
