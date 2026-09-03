@@ -54,6 +54,40 @@ def _build_table_edge_rows(
     ]
 
 
+def _drop_unanchored_join_edges(job_name: str, edges: JobEdges) -> JobEdges:
+    """
+    Drop join edges naming tables the job's table_edges do not report.
+
+    Extractors sometimes leak dataframe or CTE names into join_edges; a
+    join is only kept when both of its tables were reported as read or
+    written by the same job.
+
+    Args:
+        job_name: name of the job, for logging
+        edges: the job's extracted edges
+
+    Returns:
+        The edges with unanchored join edges removed
+    """
+    tables = {edge.table for edge in edges.table_edges}
+    kept = []
+    for edge in edges.join_edges:
+        if edge.left_table in tables and edge.right_table in tables:
+            kept.append(edge)
+            continue
+        logger.warning(
+            "dropping unanchored join edge %s.%s = %s.%s from %s",
+            edge.left_table,
+            edge.left_column,
+            edge.right_table,
+            edge.right_column,
+            job_name,
+        )
+    if len(kept) == len(edges.join_edges):
+        return edges
+    return edges.model_copy(update={"join_edges": kept})
+
+
 def _build_join_edge_rows(
     job_id: str, edges: JobEdges
 ) -> list[CatalogTableJoinEdgeInsert]:
@@ -122,7 +156,9 @@ def sync_job_edges(
     join_edge_rows: list[CatalogTableJoinEdgeInsert] = []
     for job, sources, cache_key in stale:
         logger.info("extracting edges from %s", job["name"])
-        edges = extractor.extract(job, sources)
+        edges = _drop_unanchored_join_edges(
+            job["name"], extractor.extract(job, sources)
+        )
         extraction_rows.append(
             {
                 "job_id": job["id"],

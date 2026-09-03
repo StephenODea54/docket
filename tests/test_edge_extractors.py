@@ -59,6 +59,13 @@ def make_edges() -> JobEdges:
                 evidence="spark.table('raw.orders')",
             ),
             JobTableEdge(
+                database="raw",
+                table="customers",
+                direction="read",
+                is_dynamic=False,
+                evidence="spark.table('raw.customers')",
+            ),
+            JobTableEdge(
                 database="mart",
                 table="fct_orders",
                 direction="write",
@@ -126,6 +133,30 @@ class TestHashSlingingSlasher:
 
 
 class TestSyncJobEdges:
+    def test_drops_unanchored_join_edges(self, conn, job):
+        clients = make_clients(conn)
+        edges = make_edges()
+        edges.join_edges.append(
+            TableJoinEdge(
+                left_database=None,
+                left_table="some_dataframe",
+                left_column="id",
+                right_database="raw",
+                right_table="orders",
+                right_column="id",
+                evidence="some_dataframe.merge(orders, on='id')",
+            )
+        )
+        extractor = FixtureEdgeExtractor({JOB_NAME: edges})
+
+        run_sync(extractor, job, make_sources(), clients)
+
+        _, _, table_join_edges = clients
+        stored = table_join_edges.get_edges()
+        assert [(e["left_table"], e["right_table"]) for e in stored] == [
+            ("orders", "customers")
+        ]
+
     def test_persists_extraction_and_edges(self, conn, job):
         clients = make_clients(conn)
         extractor = FixtureEdgeExtractor({JOB_NAME: make_edges()})
@@ -137,7 +168,7 @@ class TestSyncJobEdges:
         stored = extractions.get_extractions()
         assert len(stored) == 1
         assert stored[0]["model"] == "fixture"
-        assert len(job_table_edges.get_edges()) == 2
+        assert len(job_table_edges.get_edges()) == 3
         assert len(table_join_edges.get_edges()) == 1
 
     def test_skips_cached_job(self, conn, job):
@@ -161,7 +192,7 @@ class TestSyncJobEdges:
         assert extractor.calls == 2
         extractions, job_table_edges, _ = clients
         assert len(extractions.get_extractions()) == 1
-        assert len(job_table_edges.get_edges()) == 2
+        assert len(job_table_edges.get_edges()) == 3
 
     def test_skips_job_without_sources(self, conn, job):
         clients = make_clients(conn)
