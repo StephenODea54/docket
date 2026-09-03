@@ -1,15 +1,16 @@
 import logging
-import os
+
+from .env import LOG_LEVEL, env
 
 _root = logging.getLogger("docket")
 _root.addHandler(logging.NullHandler())
 
-_env_level = os.environ.get("DOCKET_LOG_LEVEL", "").upper()
+_env_level = env.log_level
 if _env_level:
     try:
         _root.setLevel(_env_level)
     except ValueError:
-        _root.warning("ignoring invalid DOCKET_LOG_LEVEL=%s", _env_level)
+        _root.warning("ignoring invalid %s=%s", LOG_LEVEL, _env_level)
 
 
 def get_logger(name: str) -> logging.Logger:
