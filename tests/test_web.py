@@ -168,6 +168,7 @@ def test_table_detail_renders_metadata_and_join_graph(client):
     assert "Written by" in response.text
     assert "Read by" in response.text
     assert "glue: summary_sync" in response.text
+    assert "★" in response.text
 
 
 def test_dag_renders_layers_and_flow_arrows(client):

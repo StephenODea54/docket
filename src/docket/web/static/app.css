@@ -226,6 +226,10 @@ table.columns th {
   font-weight: 600;
 }
 
+table.columns td.star {
+  color: var(--accent);
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

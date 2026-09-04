@@ -48,6 +48,7 @@
       <tr>
         <th>Name</th>
         <th>Type</th>
+        <th title="Partition key">Partition</th>
         <th>Comment</th>
       </tr>
     </thead>
@@ -56,13 +57,15 @@
       <tr>
         <td>{{ column.Name }}</td>
         <td>{{ column.Type }}</td>
+        <td></td>
         <td>{{ column.Comment or "" }}</td>
       </tr>
       {% endfor %}
       {% for column in partition_keys %}
       <tr>
-        <td>{{ column.Name }} (partition)</td>
+        <td>{{ column.Name }}</td>
         <td>{{ column.Type }}</td>
+        <td class="star">★</td>
         <td>{{ column.Comment or "" }}</td>
       </tr>
       {% endfor %}
