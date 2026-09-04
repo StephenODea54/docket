@@ -23,6 +23,9 @@ wheels/
 !uv.lock
 
 # And file types
+!*.css
+!*.html
+!*.js
 !*.md
 !*.py
 !*.toml
