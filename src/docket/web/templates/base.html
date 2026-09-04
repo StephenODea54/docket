@@ -10,10 +10,10 @@
         if (theme) document.documentElement.dataset.theme = theme;
       } catch (error) {}
     </script>
-    <link rel="stylesheet" href="/static/app.css" />
-    <script src="/static/htmx.min.js"></script>
-    <script src="/static/app.js" defer></script>
-    <script src="/static/alpine.min.js" defer></script>
+    <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}" />
+    <script src="/static/htmx.min.js?v={{ asset_version }}"></script>
+    <script src="/static/app.js?v={{ asset_version }}" defer></script>
+    <script src="/static/alpine.min.js?v={{ asset_version }}" defer></script>
   </head>
   <body>
     {% block body %}{% endblock %}

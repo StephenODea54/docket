@@ -21,7 +21,11 @@ def create_app(db: Any) -> FastAPI:
     app = FastAPI(title="docket")
     app.state.db = db
     package_dir = Path(__file__).parent
+    static_dir = package_dir / "static"
     app.state.templates = Jinja2Templates(directory=package_dir / "templates")
-    app.mount("/static", StaticFiles(directory=package_dir / "static"), name="static")
+    app.state.templates.env.globals["asset_version"] = int(
+        max(path.stat().st_mtime for path in static_dir.iterdir())
+    )
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.include_router(router)
     return app
