@@ -186,8 +186,7 @@ def test_dag_clamps_depth(client):
     response = client.get("/dag/raw/orders?depth=99")
 
     assert response.status_code == 200
-    active = response.text.index("pill active")
-    assert "depth=4" in response.text[active : active + 200]
+    assert "raw.orders lineage" in response.text
 
 
 def test_unknown_table_returns_404(client):

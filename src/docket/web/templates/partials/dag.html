@@ -2,14 +2,6 @@
   <div class="dag-header">
     <h2>{{ table.database_name }}.{{ table.name }} lineage</h2>
     <div class="pills">
-      {% for level in (1, 2, 3, 4) %}
-      <a
-        class="pill{% if level == depth %} active{% endif %}"
-        hx-get="/dag/{{ table.database_name | urlencode }}/{{ table.name | urlencode }}?depth={{ level }}"
-        hx-target="#detail"
-        hx-swap="innerHTML"
-      >{{ level }}</a>
-      {% endfor %}
       <a
         class="pill"
         hx-get="/tables/{{ table.database_name | urlencode }}/{{ table.name | urlencode }}"
