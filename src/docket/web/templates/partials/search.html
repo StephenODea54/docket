@@ -1,0 +1,23 @@
+<section class="card">
+  {% if not q %}
+  <p class="placeholder">Type a column name to search.</p>
+  {% elif not results %}
+  <p class="placeholder">No columns match "{{ q }}".</p>
+  {% else %}
+  <h3>Columns matching "{{ q }}"</h3>
+  <ul class="search-results">
+    {% for result in results %}
+    <li>
+      <a
+        hx-get="/tables/{{ result.database | urlencode }}/{{ result.table | urlencode }}"
+        hx-target="#detail"
+        hx-swap="innerHTML"
+      >{{ result.database }}.{{ result.table }}</a>
+      <span class="chips">
+        {% for column in result.columns %}<span class="chip">{{ column }}</span>{% endfor %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>

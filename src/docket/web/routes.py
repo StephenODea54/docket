@@ -24,6 +24,42 @@ async def index(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/search", response_class=HTMLResponse)
+async def search(request: Request, q: str = Query(default="")) -> HTMLResponse:
+    """Render the column search results partial."""
+    db = request.app.state.db
+    needle = q.strip().lower()
+    results = []
+    if needle:
+        for table in db.clients["catalog_tables"].get_tables():
+            descriptor = (
+                decode_column(CatalogTableModel, table, "storage_descriptor") or {}
+            )
+            partitions = (
+                decode_column(CatalogTableModel, table, "partition_keys") or []
+            )
+            matched = sorted(
+                {
+                    column["Name"]
+                    for column in (descriptor.get("Columns") or []) + partitions
+                    if column.get("Name") and needle in column["Name"].lower()
+                }
+            )
+            if matched:
+                results.append(
+                    {
+                        "database": table["database_name"],
+                        "table": table["name"],
+                        "columns": matched,
+                    }
+                )
+            if len(results) >= 50:
+                break
+    return request.app.state.templates.TemplateResponse(
+        request, "partials/search.html", {"q": q.strip(), "results": results}
+    )
+
+
 @router.get("/tables/{database_name}/{table_name}", response_class=HTMLResponse)
 async def table_detail(
     request: Request, database_name: str, table_name: str

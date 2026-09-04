@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
-<nav id="sidebar" x-data="{ open: null, active: null }">
+<nav id="sidebar" x-data="{ open: null, active: null, q: '' }">
   <div class="sidebar-header">
     <h1>docket</h1>
     <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
@@ -8,24 +8,50 @@
       <span class="sun">☀️</span>
     </button>
   </div>
+  <input
+    class="sidebar-input"
+    type="search"
+    placeholder="Filter tables…"
+    x-model="q"
+  />
+  <input
+    class="sidebar-input"
+    type="search"
+    name="q"
+    placeholder="Search columns…"
+    hx-get="/search"
+    hx-trigger="input changed delay:300ms, search"
+    hx-target="#detail"
+    hx-swap="innerHTML"
+  />
   {% for database_name, table_names in tables_by_database.items() %}
-  <div>
+  <div
+    data-needle="{{ (database_name ~ ' ' ~ table_names | join(' ')) | lower }}"
+    x-show="!q || $el.dataset.needle.includes(q.toLowerCase())"
+  >
     <button
       class="accordion-header"
-      @click="open = open === {{ database_name | tojson }} ? null : {{ database_name | tojson }}"
+      @click='open = open === {{ database_name | tojson }} ? null : {{ database_name | tojson }}'
     >
       <span>{{ database_name }}</span>
-      <span x-text="open === {{ database_name | tojson }} ? '−' : '+'">+</span>
+      <span x-text='open === {{ database_name | tojson }} ? "−" : "+"'>+</span>
     </button>
-    <ul class="accordion-tables" x-show="open === {{ database_name | tojson }}" x-cloak>
+    <ul
+      class="accordion-tables"
+      x-show='q.length > 0 || open === {{ database_name | tojson }}'
+      x-cloak
+    >
       {% for table_name in table_names %}
-      <li>
+      <li
+        data-needle="{{ table_name | lower }}"
+        x-show="!q || $el.dataset.needle.includes(q.toLowerCase())"
+      >
         <a
           hx-get="/tables/{{ database_name | urlencode }}/{{ table_name | urlencode }}"
           hx-target="#detail"
           hx-swap="innerHTML"
-          @click="active = {{ (database_name ~ '.' ~ table_name) | tojson }}"
-          :class="{ active: active === {{ (database_name ~ '.' ~ table_name) | tojson }} }"
+          @click='active = {{ (database_name ~ "." ~ table_name) | tojson }}'
+          :class='{ active: active === {{ (database_name ~ "." ~ table_name) | tojson }} }'
         >{{ table_name }}</a>
       </li>
       {% endfor %}

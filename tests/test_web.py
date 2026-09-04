@@ -189,6 +189,24 @@ def test_dag_clamps_depth(client):
     assert "raw.orders lineage" in response.text
 
 
+def test_search_matches_columns_and_partitions(client):
+    response = client.get("/search?q=customer")
+
+    assert response.status_code == 200
+    assert "raw.orders" in response.text
+    assert "customer_id" in response.text
+
+    response = client.get("/search?q=ds")
+
+    assert response.status_code == 200
+    assert "raw.orders" in response.text
+
+
+def test_search_without_matches_or_query(client):
+    assert "No columns match" in client.get("/search?q=zzz").text
+    assert "Type a column name" in client.get("/search").text
+
+
 def test_unknown_table_returns_404(client):
     for path in ("/tables/raw/missing", "/dag/raw/missing"):
         assert client.get(path).status_code == 404
