@@ -6,6 +6,24 @@
   --surface: #ffffff;
   --text: #101828;
   --active-bg: #eff6ff;
+  --h-1: #dbeafe;
+  --ht-1: #1e3a8a;
+  --hl-1: #3b82f6;
+  --h-2: #dcfce7;
+  --ht-2: #14532d;
+  --hl-2: #22c55e;
+  --h-3: #fef3c7;
+  --ht-3: #78350f;
+  --hl-3: #f59e0b;
+  --h-4: #ede9fe;
+  --ht-4: #4c1d95;
+  --hl-4: #8b5cf6;
+  --h-5: #ffe4e6;
+  --ht-5: #881337;
+  --hl-5: #f43f5e;
+  --h-6: #ccfbf1;
+  --ht-6: #134e4a;
+  --hl-6: #14b8a6;
 }
 
 [data-theme="dark"] {
@@ -16,6 +34,24 @@
   --surface: #161b22;
   --text: #e6edf3;
   --active-bg: #1f2a44;
+  --h-1: #1e3a5f;
+  --ht-1: #93c5fd;
+  --hl-1: #60a5fa;
+  --h-2: #14352a;
+  --ht-2: #86efac;
+  --hl-2: #4ade80;
+  --h-3: #3d2e12;
+  --ht-3: #fcd34d;
+  --hl-3: #fbbf24;
+  --h-4: #2e2352;
+  --ht-4: #c4b5fd;
+  --hl-4: #a78bfa;
+  --h-5: #451a26;
+  --ht-5: #fda4af;
+  --hl-5: #fb7185;
+  --h-6: #123c37;
+  --ht-6: #5eead4;
+  --hl-6: #2dd4bf;
 }
 
 * {
@@ -90,6 +126,7 @@ body {
   text-align: left;
   border: none;
   background: none;
+  color: inherit;
   padding: 0.5rem 0.25rem;
   font-size: 0.9rem;
   font-weight: 600;
@@ -189,10 +226,190 @@ table.columns th {
   font-weight: 600;
 }
 
-.diagram {
-  overflow-x: auto;
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
 }
 
-pre.mermaid {
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.dag-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.dag-header h2,
+.dag-header h3 {
   margin: 0;
+}
+
+.pills {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.pill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pill.active {
+  background: var(--active-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.graph {
+  position: relative;
+  overflow: auto;
+  padding: 0.75rem;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 18px 18px;
+  border-radius: 8px;
+}
+
+.graph-layers {
+  display: flex;
+  align-items: flex-start;
+  gap: 6rem;
+  width: max-content;
+  min-width: 100%;
+}
+
+.graph-layer {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  flex-shrink: 0;
+}
+
+.graph-card {
+  width: 16rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  transition: opacity 0.15s;
+  position: relative;
+  z-index: 1;
+}
+
+.graph-card.focus {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.graph-card-header {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 7px 7px 0 0;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  background: var(--h);
+  color: var(--ht);
+}
+
+.graph-card > .graph-card-header:only-child {
+  border-radius: 7px;
+}
+
+.ramp-1 { --h: var(--h-1); --ht: var(--ht-1); --hl: var(--hl-1); }
+.ramp-2 { --h: var(--h-2); --ht: var(--ht-2); --hl: var(--hl-2); }
+.ramp-3 { --h: var(--h-3); --ht: var(--ht-3); --hl: var(--hl-3); }
+.ramp-4 { --h: var(--h-4); --ht: var(--ht-4); --hl: var(--hl-4); }
+.ramp-5 { --h: var(--h-5); --ht: var(--ht-5); --hl: var(--hl-5); }
+.ramp-6 { --h: var(--h-6); --ht: var(--ht-6); --hl: var(--hl-6); }
+
+.graph-col {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.graph-col:hover {
+  background: var(--active-bg);
+}
+
+.swatch {
+  width: 0.45rem;
+  height: 0.45rem;
+  transform: rotate(45deg);
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.swatch.partition {
+  background: var(--hl, var(--accent));
+}
+
+.badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 0 0.3rem;
+  border-radius: 4px;
+}
+
+.graph-lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  color: var(--muted);
+  z-index: 2;
+}
+
+.graph-lines path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  pointer-events: stroke;
+  transition: opacity 0.15s, stroke-width 0.15s;
+}
+
+.graph-lines path.edge-dim {
+  opacity: 0.08;
+}
+
+.graph-lines path.edge-hot {
+  stroke-width: 2.5;
+  color: var(--accent);
+}
+
+.card-dim {
+  opacity: 0.25;
+}
+
+.row-dim {
+  opacity: 0.3;
 }

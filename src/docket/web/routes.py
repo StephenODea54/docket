@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
 from ..db.catalog_tables import CatalogTableModel
 from ..db.utils import decode_column
-from .diagrams import build_dag, build_erd
+from .graph import build_dag, build_erd
 
 router = APIRouter()
 
@@ -28,33 +28,41 @@ async def index(request: Request) -> HTMLResponse:
 async def table_detail(
     request: Request, database_name: str, table_name: str
 ) -> HTMLResponse:
-    """Render the table detail partial: metadata, columns, ERD, and DAG."""
+    """Render the table detail partial: metadata, columns, and the join diagram."""
     db = request.app.state.db
     table = db.clients["catalog_tables"].get_table(database_name, table_name)
     if table is None:
         return HTMLResponse("<p>Table not found.</p>", status_code=404)
     descriptor = decode_column(CatalogTableModel, table, "storage_descriptor") or {}
     partition_keys = decode_column(CatalogTableModel, table, "partition_keys") or []
-    columns = descriptor.get("Columns") or []
-    join_edges = db.clients["catalog_table_join_edges"].get_table_edges(table_name)
-    edge_tables = {edge["left_table"] for edge in join_edges} | {
-        edge["right_table"] for edge in join_edges
+    job_edges = db.clients["catalog_job_table_edges"].get_table_edges([table_name])
+    jobs = {
+        job["id"]: f"{job['type']}: {job['name']}"
+        for job in db.clients["catalog_jobs"].get_jobs_by_ids(
+            sorted({edge["job_id"] for edge in job_edges})
+        )
     }
-    partner_names = sorted(edge_tables - {table_name})
-    partners = db.clients["catalog_tables"].get_tables_by_names(partner_names)
-    columns_by_table = {table_name: columns}
-    for partner in partners:
-        partner_descriptor = (
-            decode_column(CatalogTableModel, partner, "storage_descriptor") or {}
-        )
-        columns_by_table.setdefault(
-            partner["name"], partner_descriptor.get("Columns") or []
-        )
-    erd_source = build_erd(table_name, columns_by_table, join_edges)
-    dag_source = build_dag(
+    writers = sorted(
+        {
+            jobs[edge["job_id"]]
+            for edge in job_edges
+            if edge["direction"] == "write" and edge["job_id"] in jobs
+        }
+    )
+    readers = sorted(
+        {
+            jobs[edge["job_id"]]
+            for edge in job_edges
+            if edge["direction"] == "read" and edge["job_id"] in jobs
+        }
+    )
+    join_edges = db.clients["catalog_table_join_edges"].get_table_edges(table_name)
+    graph = build_erd(
+        database_name,
         table_name,
-        db.clients["catalog_job_table_edges"].get_table_edges,
-        db.clients["catalog_job_table_edges"].get_job_edges,
+        table,
+        join_edges,
+        db.clients["catalog_tables"].get_tables_by_names,
         db.clients["catalog_jobs"].get_jobs_by_ids,
     )
     return request.app.state.templates.TemplateResponse(
@@ -63,9 +71,37 @@ async def table_detail(
         {
             "table": table,
             "location": descriptor.get("Location"),
-            "columns": columns,
+            "columns": descriptor.get("Columns") or [],
             "partition_keys": partition_keys,
-            "erd_source": erd_source,
-            "dag_source": dag_source,
+            "graph": graph,
+            "writers": writers,
+            "readers": readers,
         },
+    )
+
+
+@router.get("/dag/{database_name}/{table_name}", response_class=HTMLResponse)
+async def dag(
+    request: Request,
+    database_name: str,
+    table_name: str,
+    depth: int = Query(default=2),
+) -> HTMLResponse:
+    """Render the lineage diagram partial for a table."""
+    db = request.app.state.db
+    table = db.clients["catalog_tables"].get_table(database_name, table_name)
+    if table is None:
+        return HTMLResponse("<p>Table not found.</p>", status_code=404)
+    depth = max(1, min(depth, 4))
+    graph = build_dag(
+        database_name,
+        table_name,
+        db.clients["catalog_job_table_edges"].get_table_edges,
+        db.clients["catalog_job_table_edges"].get_job_edges,
+        db.clients["catalog_jobs"].get_jobs_by_ids,
+        db.clients["catalog_tables"].get_tables_by_names,
+        depth,
+    )
+    return request.app.state.templates.TemplateResponse(
+        request, "partials/dag.html", {"table": table, "depth": depth, "graph": graph}
     )

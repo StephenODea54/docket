@@ -1,0 +1,30 @@
+<div class="graph" data-graph>
+  <div class="graph-layers">
+    {% for layer in graph.layers %}
+    <div class="graph-layer">
+      {% for card in layer %}
+      <div class="graph-card ramp-{{ card.ramp }}{% if card.focus %} focus{% endif %}" data-table="{{ card.key }}">
+        {% if card.database %}
+        <a
+          class="graph-card-header"
+          hx-get="/tables/{{ card.database | urlencode }}/{{ card.table | urlencode }}"
+          hx-target="#detail"
+          hx-swap="innerHTML"
+        >{{ card.key }}</a>
+        {% else %}
+        <span class="graph-card-header">{{ card.key }}</span>
+        {% endif %}
+        {% for row in card.rows %}
+        <div class="graph-col" data-col="{{ card.key }}.{{ row.name }}">
+          <span class="swatch{% if row.partition %} partition{% endif %}"></span>
+          <span>{{ row.name }}</span>
+          {% if row.partition %}<span class="badge">part</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  <script type="application/json" data-graph-refs>{{ graph.arrows | tojson }}</script>
+</div>

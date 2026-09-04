@@ -29,6 +29,14 @@
     <dt>Last accessed</dt>
     <dd>{{ table.last_access_time }}</dd>
     {% endif %}
+    {% if writers %}
+    <dt>Written by</dt>
+    <dd class="chips">{% for job in writers %}<span class="chip">{{ job }}</span>{% endfor %}</dd>
+    {% endif %}
+    {% if readers %}
+    <dt>Read by</dt>
+    <dd class="chips">{% for job in readers %}<span class="chip">{{ job }}</span>{% endfor %}</dd>
+    {% endif %}
   </dl>
 </section>
 
@@ -66,11 +74,20 @@
 </section>
 
 <section class="card diagram">
-  <h3>ERD</h3>
-  <pre class="mermaid">{{ erd_source }}</pre>
-</section>
-
-<section class="card diagram">
-  <h3>Lineage</h3>
-  <pre class="mermaid">{{ dag_source }}</pre>
+  <div class="dag-header">
+    <h3>Joins</h3>
+    <div class="pills">
+      <a
+        class="pill"
+        hx-get="/dag/{{ table.database_name | urlencode }}/{{ table.name | urlencode }}"
+        hx-target="#detail"
+        hx-swap="innerHTML"
+      >lineage &rarr;</a>
+    </div>
+  </div>
+  {% if graph.arrows %}
+  {% include "partials/_graph.html" %}
+  {% else %}
+  <p class="placeholder">No join edges touch this table.</p>
+  {% endif %}
 </section>

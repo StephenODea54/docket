@@ -36,7 +36,7 @@ def make_glue_database(name):
     return record
 
 
-def make_glue_table(database_name, name, columns=()):
+def make_glue_table(database_name, name, columns=(), partitions=()):
     record = dict.fromkeys(AwsGlueTableSelect.__annotations__)
     record["database_name"] = database_name
     record["name"] = name
@@ -49,6 +49,9 @@ def make_glue_table(database_name, name, columns=()):
             ],
             "Location": f"s3://bucket/{name}",
         }
+    )
+    record["partition_keys"] = json.dumps(
+        [{"Name": partition, "Type": "string"} for partition in partitions]
     )
     return record
 
@@ -77,6 +80,7 @@ def client():
                     "raw",
                     "orders",
                     columns=[("id", "bigint"), ("customer_id", "bigint")],
+                    partitions=("ds",),
                 ),
                 make_glue_table("raw", "customers", columns=[("id", "bigint")]),
                 make_glue_table("analytics", "orders_summary"),
@@ -148,21 +152,43 @@ def test_index_lists_databases_and_tables(client):
         assert name in response.text
 
 
-def test_table_detail_renders_metadata_erd_and_dag(client):
+def test_table_detail_renders_metadata_and_join_graph(client):
     response = client.get("/tables/raw/orders")
 
     assert response.status_code == 200
     assert "raw.orders" in response.text
     assert "customer_id" in response.text
     assert "s3://bucket/orders" in response.text
-    assert "erDiagram" in response.text
-    assert "customer_id = id" in response.text
-    assert "flowchart LR" in response.text
+    assert "data-graph" in response.text
+    assert 'data-col="raw.orders.customer_id"' in response.text
+    assert 'data-col="raw.orders.ds"' in response.text
+    assert 'data-table="raw.customers"' in response.text
+    assert "raw.customers.id" in response.text
     assert "glue: orders_etl" in response.text
+    assert "Written by" in response.text
+    assert "Read by" in response.text
     assert "glue: summary_sync" in response.text
 
 
-def test_unknown_table_returns_404(client):
-    response = client.get("/tables/raw/missing")
+def test_dag_renders_layers_and_flow_arrows(client):
+    response = client.get("/dag/raw/orders")
 
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert "raw.orders lineage" in response.text
+    assert 'data-table="analytics.orders_summary"' in response.text
+    assert "glue: orders_etl" in response.text
+    assert "glue: summary_sync" in response.text
+    assert '"head": "b"' in response.text
+
+
+def test_dag_clamps_depth(client):
+    response = client.get("/dag/raw/orders?depth=99")
+
+    assert response.status_code == 200
+    active = response.text.index("pill active")
+    assert "depth=4" in response.text[active : active + 200]
+
+
+def test_unknown_table_returns_404(client):
+    for path in ("/tables/raw/missing", "/dag/raw/missing"):
+        assert client.get(path).status_code == 404
