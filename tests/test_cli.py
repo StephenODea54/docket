@@ -43,3 +43,58 @@ def test_run_invokes_pipeline(monkeypatch):
     assert isinstance(calls["extractor"], LlmEdgeExtractor)
     assert calls["extractor"].model == "test/model"
     assert "re-extracted 2 jobs" in result.output
+
+
+def test_serve_missing_db_exits(tmp_path):
+    missing = tmp_path / "missing.db"
+    result = runner.invoke(cli.app, ["serve", "--db-path", str(missing)])
+    assert result.exit_code == 2
+    assert "docket run" in result.stderr
+
+
+def test_serve_runs_uvicorn(monkeypatch, tmp_path):
+    db_file = tmp_path / "docket.db"
+    db_file.touch()
+    calls = {}
+    monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
+    monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
+
+    def fake_run(app, host, port):
+        calls["app"] = app
+        calls["host"] = host
+        calls["port"] = port
+
+    monkeypatch.setattr(cli.uvicorn, "run", fake_run)
+
+    result = runner.invoke(
+        cli.app,
+        ["serve", "--db-path", str(db_file), "--host", "0.0.0.0", "--port", "9000"],
+    )
+
+    assert result.exit_code == 0
+    assert calls["app"] == f"app:db:{db_file}"
+    assert calls["host"] == "0.0.0.0"
+    assert calls["port"] == 9000
+
+
+def test_serve_reads_env_defaults(monkeypatch, tmp_path):
+    db_file = tmp_path / "docket.db"
+    db_file.touch()
+    monkeypatch.setenv("DOCKET_DB_PATH", str(db_file))
+    monkeypatch.setenv("DOCKET_SERVE_HOST", "0.0.0.0")
+    monkeypatch.setenv("DOCKET_SERVE_PORT", "9100")
+    calls = {}
+    monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
+    monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
+
+    def fake_run(app, host, port):
+        calls["host"] = host
+        calls["port"] = port
+
+    monkeypatch.setattr(cli.uvicorn, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["serve"])
+
+    assert result.exit_code == 0
+    assert calls["host"] == "0.0.0.0"
+    assert calls["port"] == 9100
