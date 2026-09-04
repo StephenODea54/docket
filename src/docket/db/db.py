@@ -15,11 +15,14 @@ from sustained.types import Connection
 
 from ..config import get_logger
 from ..config.env import env
+from .aws_cloudtrail_events import AwsCloudtrailEventClient
 from .aws_glue_databases import AwsGlueDatabaseClient
 from .aws_glue_jobs import AwsGlueJobClient
 from .aws_glue_tables import AwsGlueTableClient
 from .aws_lambda_functions import AwsLambdaFunctionClient
 from .aws_s3_objects import AwsS3ObjectClient
+from .catalog_audit_events import MODELS as CATALOG_AUDIT_EVENT_MODELS
+from .catalog_audit_events import CatalogAuditEventClient
 from .catalog_databases import MODELS as CATALOG_DATABASE_MODELS
 from .catalog_databases import CatalogDatabaseClient
 from .catalog_job_artifacts import MODELS as CATALOG_JOB_ARTIFACT_MODELS
@@ -43,6 +46,7 @@ DARWIN_ARM64_VERSION = "v1.29.0"
 _MACHINES = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}
 
 ALL_MODELS = [
+    *CATALOG_AUDIT_EVENT_MODELS,
     *CATALOG_DATABASE_MODELS,
     *CATALOG_TABLE_MODELS,
     *CATALOG_JOB_MODELS,
@@ -208,6 +212,7 @@ class DB:
         regions = env.aws_regions
         self.conn = _connect(db_path=db_path)
         self.clients = {
+            "aws_cloudtrail_events": AwsCloudtrailEventClient(self.conn),
             "aws_glue_databases": AwsGlueDatabaseClient(self.conn),
             "aws_glue_jobs": AwsGlueJobClient(self.conn),
             "aws_glue_tables": AwsGlueTableClient(self.conn),
@@ -215,6 +220,7 @@ class DB:
             "aws_s3_objects": AwsS3ObjectClient(
                 region=regions[0] if regions else None
             ),
+            "catalog_audit_events": CatalogAuditEventClient(self.conn),
             "catalog_databases": CatalogDatabaseClient(self.conn),
             "catalog_jobs": CatalogJobClient(self.conn),
             "catalog_job_artifacts": CatalogJobArtifactClient(self.conn),
