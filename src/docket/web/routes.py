@@ -1,8 +1,11 @@
+from typing import Any
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
 from ..db.catalog_tables import CatalogTableModel
 from ..db.utils import decode_column
+from ..lineage import collect_dependents
 from .graph import build_dag, build_erd
 
 router = APIRouter()
@@ -35,9 +38,7 @@ async def search(request: Request, q: str = Query(default="")) -> HTMLResponse:
             descriptor = (
                 decode_column(CatalogTableModel, table, "storage_descriptor") or {}
             )
-            partitions = (
-                decode_column(CatalogTableModel, table, "partition_keys") or []
-            )
+            partitions = decode_column(CatalogTableModel, table, "partition_keys") or []
             matched = sorted(
                 {
                     column["Name"]
@@ -114,6 +115,26 @@ async def table_detail(
             "readers": readers,
         },
     )
+
+
+@router.get("/api/tables/{database_name}/{table_name}/dependents")
+async def table_dependents(
+    request: Request, database_name: str, table_name: str
+) -> dict[str, Any]:
+    """Return the dependents report for a table as JSON."""
+    db = request.app.state.db
+    table = db.clients["catalog_tables"].get_table(database_name, table_name)
+    report = collect_dependents(
+        database_name,
+        table_name,
+        db.clients["catalog_job_table_edges"].get_table_edges,
+        db.clients["catalog_job_table_edges"].get_job_edges,
+        db.clients["catalog_table_join_edges"].get_table_edges,
+        db.clients["catalog_jobs"].get_jobs_by_ids,
+        db.clients["catalog_tables"].get_tables_by_names,
+        in_catalog=table is not None,
+    )
+    return dict(report)
 
 
 @router.get("/dag/{database_name}/{table_name}", response_class=HTMLResponse)

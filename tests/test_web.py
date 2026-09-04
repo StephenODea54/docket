@@ -207,6 +207,32 @@ def test_search_without_matches_or_query(client):
     assert "Type a column name" in client.get("/search").text
 
 
+def test_dependents_endpoint_reports_blast_radius(client):
+    response = client.get("/api/tables/raw/orders/dependents")
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["in_catalog"] is True
+    assert report["has_dependents"] is True
+    assert [job["label"] for job in report["direct_jobs"]] == ["glue: orders_etl"]
+    assert report["direct_tables"] == [
+        {"database": "analytics", "table": "orders_summary"}
+    ]
+    assert [job["label"] for job in report["transitive_jobs"]] == ["glue: summary_sync"]
+    assert report["transitive_tables"] == []
+    assert [ref["partner"]["table"] for ref in report["join_refs"]] == ["customers"]
+
+
+def test_dependents_endpoint_answers_for_unknown_table(client):
+    response = client.get("/api/tables/raw/missing/dependents")
+
+    assert response.status_code == 200
+    report = response.json()
+    assert report["in_catalog"] is False
+    assert report["has_dependents"] is False
+    assert report["direct_jobs"] == []
+
+
 def test_unknown_table_returns_404(client):
     for path in ("/tables/raw/missing", "/dag/raw/missing"):
         assert client.get(path).status_code == 404
