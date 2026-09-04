@@ -74,3 +74,19 @@ class CatalogJobClient:
         result = CatalogJobModel.query().orderBy("type").orderBy("name").to_dicts()
         logger.info("retrieved %s job(s) from catalog_jobs", len(result))
         return cast(list[CatalogJobSelect], result)
+
+    def get_jobs_by_ids(self, job_ids: Sequence[str]) -> list[CatalogJobSelect]:
+        """
+        Get the job records with the given PKs.
+
+        Args:
+            job_ids: PKs of the job records to fetch
+
+        Returns:
+            list[CatalogJobSelect]
+        """
+        if not job_ids:
+            return []
+        result = CatalogJobModel.query().whereIn("id", list(job_ids)).to_dicts()
+        logger.info("retrieved %s job(s) from catalog_jobs", len(result))
+        return cast(list[CatalogJobSelect], result)

@@ -100,3 +100,43 @@ class CatalogJobTableEdgeClient:
         )
         logger.info("retrieved %s edge(s) from catalog_job_table_edges", len(result))
         return cast(list[CatalogJobTableEdgeSelect], result)
+
+    def get_table_edges(
+        self, table_names: Sequence[str]
+    ) -> list[CatalogJobTableEdgeSelect]:
+        """
+        Get the edge records touching any of the given tables.
+
+        Args:
+            table_names: the table names to filter on
+
+        Returns:
+            list of catalog job table edges
+        """
+        if not table_names:
+            return []
+        result = (
+            CatalogJobTableEdgeModel.query()
+            .whereIn("table_name", list(table_names))
+            .to_dicts()
+        )
+        logger.info("retrieved %s edge(s) from catalog_job_table_edges", len(result))
+        return cast(list[CatalogJobTableEdgeSelect], result)
+
+    def get_job_edges(self, job_ids: Sequence[str]) -> list[CatalogJobTableEdgeSelect]:
+        """
+        Get the edge records for the given jobs.
+
+        Args:
+            job_ids: PKs of the job records to fetch the edges for
+
+        Returns:
+            list of catalog job table edges
+        """
+        if not job_ids:
+            return []
+        result = (
+            CatalogJobTableEdgeModel.query().whereIn("job_id", list(job_ids)).to_dicts()
+        )
+        logger.info("retrieved %s edge(s) from catalog_job_table_edges", len(result))
+        return cast(list[CatalogJobTableEdgeSelect], result)

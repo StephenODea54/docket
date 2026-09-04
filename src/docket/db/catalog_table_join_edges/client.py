@@ -100,3 +100,24 @@ class CatalogTableJoinEdgeClient:
         )
         logger.info("retrieved %s edge(s) from catalog_table_join_edges", len(result))
         return cast(list[CatalogTableJoinEdgeSelect], result)
+
+    def get_table_edges(self, table_name: str) -> list[CatalogTableJoinEdgeSelect]:
+        """
+        Get the join edge records where the given table appears on either side.
+
+        Args:
+            table_name: the table name to filter on
+
+        Returns:
+            list of catalog table join edges
+        """
+        result = (
+            CatalogTableJoinEdgeModel.query()
+            .where("left_table", "=", table_name)
+            .orWhere("right_table", "=", table_name)
+            .orderBy("left_table")
+            .orderBy("right_table")
+            .to_dicts()
+        )
+        logger.info("retrieved %s edge(s) from catalog_table_join_edges", len(result))
+        return cast(list[CatalogTableJoinEdgeSelect], result)
