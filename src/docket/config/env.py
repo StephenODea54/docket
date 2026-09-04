@@ -1,11 +1,14 @@
 import os
 
 AWS_REGIONS = "DOCKET_AWS_REGIONS"
+DB_PATH = "DOCKET_DB_PATH"
 LLM_API_KEY = "DOCKET_LLM_API_KEY"
 LLM_CONCURRENCY = "DOCKET_LLM_CONCURRENCY"
 LLM_MODEL = "DOCKET_LLM_MODEL"
 LLM_WORKSPACE_ID = "DOCKET_LLM_WORKSPACE_ID"
 LOG_LEVEL = "DOCKET_LOG_LEVEL"
+SERVE_HOST = "DOCKET_SERVE_HOST"
+SERVE_PORT = "DOCKET_SERVE_PORT"
 
 
 class Env:
@@ -26,6 +29,11 @@ class Env:
         """
         value = os.environ.get(AWS_REGIONS, "")
         return [name.strip() for name in value.split(",") if name.strip()]
+
+    @property
+    def db_path(self) -> str:
+        """The sqlite database path from DOCKET_DB_PATH; defaults to docket.db."""
+        return os.environ.get(DB_PATH) or "docket.db"
 
     @property
     def llm_api_key(self) -> str | None:
@@ -66,6 +74,21 @@ class Env:
         """The upper-cased docket log level from DOCKET_LOG_LEVEL, or None when unset."""
         value = os.environ.get(LOG_LEVEL, "").upper()
         return value or None
+
+    @property
+    def serve_host(self) -> str:
+        """The serve bind host from DOCKET_SERVE_HOST; defaults to 127.0.0.1."""
+        return os.environ.get(SERVE_HOST) or "127.0.0.1"
+
+    @property
+    def serve_port(self) -> int:
+        """
+        The serve bind port from DOCKET_SERVE_PORT; defaults to 8000.
+
+        Values that are not positive integers fall back to the default.
+        """
+        value = os.environ.get(SERVE_PORT, "")
+        return int(value) if value.isdigit() and int(value) > 0 else 8000
 
 
 env = Env()
