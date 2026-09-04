@@ -1,11 +1,13 @@
 import logging
 import os
-from datetime import UTC, datetime
+import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import typer
 import uvicorn
 
+from .audit import find_flagged_deletions, parse_deletion_events
 from .config.env import env
 from .db import DB
 from .lineage import DependentsReport, collect_dependents, format_report
@@ -101,6 +103,80 @@ def check_delete(database: str, table: str, db_path: str | None = None) -> None:
     typer.echo(format_report(report))
     if report["has_dependents"]:
         raise typer.Exit(1)
+
+
+@app.command()
+def audit(
+    hours: int = 24,
+    show_all: bool = typer.Option(
+        False, "--all", help="Re-report deletions that were already reported."
+    ),
+    db_path: str | None = None,
+) -> None:
+    """Audit recent Glue table deletions against the catalog's dependency edges."""
+    db, resolved = _open_db(db_path)
+    typer.echo(_catalog_age(resolved))
+    start = datetime.now(UTC) - timedelta(hours=hours)
+    cloudtrail = db.clients["aws_cloudtrail_events"]
+    try:
+        rows = cloudtrail.get_events("DeleteTable", start) + cloudtrail.get_events(
+            "BatchDeleteTable", start
+        )
+    except sqlite3.OperationalError as error:
+        typer.echo(
+            f"cloudtrail query failed (check AWS credentials): {error}", err=True
+        )
+        raise typer.Exit(2) from error
+    events = parse_deletion_events(rows)
+    seen = db.clients["catalog_audit_events"].get_event_ids(
+        sorted({event["event_id"] for event in events})
+    )
+    new_events = [event for event in events if event["event_id"] not in seen]
+    to_report = events if show_all else new_events
+    findings = find_flagged_deletions(
+        to_report,
+        lambda database, table: _collect_dependents(db, database or "", table),
+    )
+    for finding in findings:
+        event = finding["event"]
+        table = (
+            f"{event['database']}.{event['table']}"
+            if event["database"]
+            else event["table"]
+        )
+        typer.echo(
+            f"DELETED WITH DEPENDENTS: {table} ({event['event_name']} by "
+            f"{event['username'] or 'unknown'} at {event['event_time'] or 'unknown'}, "
+            f"{event['region'] or 'unknown'})",
+            err=True,
+        )
+        typer.echo(format_report(finding["report"]), err=True)
+        typer.echo("", err=True)
+    if new_events:
+        flagged = {
+            (finding["event"]["event_id"], finding["event"]["table"])
+            for finding in findings
+        }
+        records = {
+            (event["event_id"], event["table"]): {
+                "event_id": event["event_id"],
+                "database_name": event["database"],
+                "table_name": event["table"],
+                "event_name": event["event_name"],
+                "event_time": event["event_time"],
+                "username": event["username"],
+                "region": event["region"],
+                "flagged": (event["event_id"], event["table"]) in flagged,
+            }
+            for event in new_events
+        }
+        with db.transaction():
+            db.clients["catalog_audit_events"].insert_events(list(records.values()))
+    label = "" if show_all else "new "
+    typer.echo(f"{len(to_report)} {label}glue deletion(s) in the last {hours}h")
+    if findings:
+        raise typer.Exit(1)
+    typer.echo("none had dependents")
 
 
 @app.command()

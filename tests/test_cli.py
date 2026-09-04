@@ -1,3 +1,8 @@
+import json
+import sqlite3
+from contextlib import nullcontext
+from datetime import datetime, timezone
+
 from typer.testing import CliRunner
 
 from docket import cli
@@ -129,6 +134,149 @@ def test_check_delete_warns_for_unknown_table(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
     assert "not in the catalog snapshot" in result.stderr
+
+
+def make_cloudtrail_row(event_id="evt-1", table="orders"):
+    return {
+        "event_id": event_id,
+        "event_name": "DeleteTable",
+        "event_source": "glue.amazonaws.com",
+        "event_time": "2026-09-03T22:14:00+00:00",
+        "username": "alice",
+        "region": "us-east-1",
+        "cloud_trail_event": json.dumps(
+            {"requestParameters": {"databaseName": "raw", "name": table}}
+        ),
+    }
+
+
+class FakeCloudtrail:
+    def __init__(self, rows=(), error=None):
+        self.rows = list(rows)
+        self.error = error
+        self.calls = []
+
+    def get_events(self, event_name, start_time):
+        self.calls.append((event_name, start_time))
+        if self.error:
+            raise self.error
+        return [row for row in self.rows if row["event_name"] == event_name]
+
+
+class FakeAuditLog:
+    def __init__(self, seen=()):
+        self.seen = set(seen)
+        self.inserted = []
+
+    def get_event_ids(self, event_ids):
+        return {event_id for event_id in event_ids if event_id in self.seen}
+
+    def insert_events(self, records):
+        self.inserted += records
+        return records
+
+
+class AuditDB(DummyDB):
+    cloudtrail = FakeCloudtrail()
+    audit_log = FakeAuditLog()
+
+    def __init__(self, db_path=None):
+        super().__init__(db_path)
+        self.clients = {
+            "aws_cloudtrail_events": type(self).cloudtrail,
+            "catalog_audit_events": type(self).audit_log,
+        }
+
+    def transaction(self):
+        return nullcontext()
+
+
+def setup_audit(monkeypatch, tmp_path, rows=(), error=None, seen=(), reports=None):
+    db_file = tmp_path / "docket.db"
+    db_file.touch()
+    AuditDB.cloudtrail = FakeCloudtrail(rows, error)
+    AuditDB.audit_log = FakeAuditLog(seen)
+    monkeypatch.setattr(cli, "DB", AuditDB)
+    monkeypatch.setattr(
+        cli,
+        "_collect_dependents",
+        lambda db, database, table: make_report(
+            table=table, has_dependents=table in (reports or ())
+        ),
+    )
+    return db_file
+
+
+def test_audit_credentials_error_exits_two(monkeypatch, tmp_path):
+    db_file = setup_audit(
+        monkeypatch, tmp_path, error=sqlite3.OperationalError("expired token")
+    )
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 2
+    assert "check AWS credentials" in result.stderr
+
+
+def test_audit_flags_deletion_with_dependents(monkeypatch, tmp_path):
+    db_file = setup_audit(
+        monkeypatch, tmp_path, rows=[make_cloudtrail_row()], reports=("orders",)
+    )
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 1
+    assert "DELETED WITH DEPENDENTS: raw.orders" in result.stderr
+    assert "DeleteTable by alice" in result.stderr
+    assert AuditDB.audit_log.inserted[0]["flagged"] is True
+
+
+def test_audit_clean_run_persists_and_exits_zero(monkeypatch, tmp_path):
+    db_file = setup_audit(monkeypatch, tmp_path, rows=[make_cloudtrail_row()])
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 0
+    assert "1 new glue deletion(s)" in result.output
+    assert "none had dependents" in result.output
+    assert AuditDB.audit_log.inserted[0]["flagged"] is False
+
+
+def test_audit_skips_seen_events_unless_all(monkeypatch, tmp_path):
+    db_file = setup_audit(
+        monkeypatch,
+        tmp_path,
+        rows=[make_cloudtrail_row()],
+        seen=("evt-1",),
+        reports=("orders",),
+    )
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 0
+    assert "0 new glue deletion(s)" in result.output
+    assert AuditDB.audit_log.inserted == []
+
+    result = runner.invoke(cli.app, ["audit", "--all", "--db-path", str(db_file)])
+
+    assert result.exit_code == 1
+    assert "DELETED WITH DEPENDENTS: raw.orders" in result.stderr
+    assert AuditDB.audit_log.inserted == []
+
+
+def test_audit_hours_bounds_lookup(monkeypatch, tmp_path):
+    db_file = setup_audit(monkeypatch, tmp_path)
+
+    result = runner.invoke(
+        cli.app, ["audit", "--hours", "48", "--db-path", str(db_file)]
+    )
+
+    assert result.exit_code == 0
+    names = [name for name, _ in AuditDB.cloudtrail.calls]
+    assert names == ["DeleteTable", "BatchDeleteTable"]
+    start = AuditDB.cloudtrail.calls[0][1]
+    lookback = (datetime.now(timezone.utc) - start).total_seconds() / 3600
+    assert 47.9 < lookback < 48.1
 
 
 def test_serve_missing_db_exits(tmp_path):
