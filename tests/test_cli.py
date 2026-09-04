@@ -1,7 +1,7 @@
 import json
 import sqlite3
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from typer.testing import CliRunner
 
@@ -275,7 +275,7 @@ def test_audit_hours_bounds_lookup(monkeypatch, tmp_path):
     names = [name for name, _ in AuditDB.cloudtrail.calls]
     assert names == ["DeleteTable", "BatchDeleteTable"]
     start = AuditDB.cloudtrail.calls[0][1]
-    lookback = (datetime.now(timezone.utc) - start).total_seconds() / 3600
+    lookback = (datetime.now(UTC) - start).total_seconds() / 3600
     assert 47.9 < lookback < 48.1
 
 

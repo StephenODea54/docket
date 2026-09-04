@@ -71,7 +71,7 @@ class Env:
 
     @property
     def log_level(self) -> str | None:
-        """The upper-cased docket log level from DOCKET_LOG_LEVEL, or None when unset."""
+        """The upper-cased log level from DOCKET_LOG_LEVEL, or None when unset."""
         value = os.environ.get(LOG_LEVEL, "").upper()
         return value or None
 

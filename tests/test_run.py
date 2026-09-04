@@ -150,7 +150,9 @@ def test_run_populates_catalog_and_extracts(conn):
     ]
     assert len(db.clients["catalog_databases"].get_databases()) == 1
     edges = db.clients["catalog_job_table_edges"].get_edges()
-    assert [(e["job_id"], e["table_name"]) for e in edges] == [(jobs[0]["id"], "orders")]
+    assert [(e["job_id"], e["table_name"]) for e in edges] == [
+        (jobs[0]["id"], "orders")
+    ]
 
 
 def test_run_rehomes_cache_on_unchanged_sources(conn):

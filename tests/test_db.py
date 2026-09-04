@@ -73,6 +73,5 @@ def test_audit_events_share_event_id_across_tables(audit_client):
 def test_audit_events_reject_duplicate_event_table(audit_client):
     with Model.transaction():
         audit_client.insert_events([make_audit_event()])
-    with pytest.raises(sqlite3.IntegrityError):
-        with Model.transaction():
-            audit_client.insert_events([make_audit_event()])
+    with pytest.raises(sqlite3.IntegrityError), Model.transaction():
+        audit_client.insert_events([make_audit_event()])

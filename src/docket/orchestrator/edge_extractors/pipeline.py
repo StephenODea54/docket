@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sustained import Model
 
@@ -173,7 +173,7 @@ def sync_job_edges(
     extraction_rows: list[CatalogJobExtractionInsert] = []
     table_edge_rows: list[CatalogJobTableEdgeInsert] = []
     join_edge_rows: list[CatalogTableJoinEdgeInsert] = []
-    for (job, sources, cache_key), edges in zip(stale, extracted):
+    for (job, _sources, cache_key), edges in zip(stale, extracted, strict=True):
         extraction_rows.append(
             {
                 "job_id": job["id"],
@@ -181,7 +181,7 @@ def sync_job_edges(
                 "model": extractor.model,
                 "prompt_version": PROMPT_VERSION,
                 "extraction": edges.model_dump_json(),
-                "extracted_at": datetime.now(timezone.utc),
+                "extracted_at": datetime.now(UTC),
             }
         )
         table_edge_rows.extend(_build_table_edge_rows(job["id"], edges))

@@ -217,9 +217,7 @@ class DB:
             "aws_glue_jobs": AwsGlueJobClient(self.conn),
             "aws_glue_tables": AwsGlueTableClient(self.conn),
             "aws_lambda_functions": AwsLambdaFunctionClient(self.conn),
-            "aws_s3_objects": AwsS3ObjectClient(
-                region=regions[0] if regions else None
-            ),
+            "aws_s3_objects": AwsS3ObjectClient(region=regions[0] if regions else None),
             "catalog_audit_events": CatalogAuditEventClient(self.conn),
             "catalog_databases": CatalogDatabaseClient(self.conn),
             "catalog_jobs": CatalogJobClient(self.conn),

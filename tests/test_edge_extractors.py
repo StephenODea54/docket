@@ -122,9 +122,9 @@ class TestHashSlingingSlasher:
         )
 
     def test_changes_with_contents(self):
-        assert hash_slinging_slasher("m", make_sources("select 1")) != hash_slinging_slasher(
-            "m", make_sources("select 2")
-        )
+        first = hash_slinging_slasher("m", make_sources("select 1"))
+        second = hash_slinging_slasher("m", make_sources("select 2"))
+        assert first != second
 
     def test_changes_with_model(self):
         assert hash_slinging_slasher("m1", make_sources()) != hash_slinging_slasher(

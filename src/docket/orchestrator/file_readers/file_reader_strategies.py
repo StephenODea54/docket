@@ -115,9 +115,7 @@ class LambdaPackageStrategy(FileReaderStrategy[AwsLambdaFunctionSelect]):
             The package bytes, or None when the download fails
         """
         try:
-            with urllib.request.urlopen(
-                location, timeout=DOWNLOAD_TIMEOUT
-            ) as response:
+            with urllib.request.urlopen(location, timeout=DOWNLOAD_TIMEOUT) as response:
                 return response.read()
         except (urllib.error.URLError, TimeoutError) as error:
             logger.warning("download failed: %s", error)

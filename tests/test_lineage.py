@@ -222,7 +222,9 @@ def test_format_report_lists_sections_and_verdict():
     assert "join references (1):" in text
     assert "- glue: reporter joins raw.orders <-> crm.customers" in text
     assert "transitive blast radius: 1 more table(s), 1 more job(s)" in text
-    assert "NOT SAFE: deleting raw.orders breaks 2 job(s) and orphans 2 table(s)" in text
+    assert (
+        "NOT SAFE: deleting raw.orders breaks 2 job(s) and orphans 2 table(s)" in text
+    )
 
 
 def test_format_report_clean():

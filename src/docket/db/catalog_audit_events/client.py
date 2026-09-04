@@ -1,6 +1,6 @@
 import sqlite3
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import cast
 from uuid import uuid4
 
@@ -35,8 +35,10 @@ class CatalogAuditEventClient:
         """
         if not records:
             raise ValueError("records must not be empty")
-        now = datetime.now(timezone.utc)
-        rows = [{"id": str(uuid4()), "reported_at": now, **record} for record in records]
+        now = datetime.now(UTC)
+        rows = [
+            {"id": str(uuid4()), "reported_at": now, **record} for record in records
+        ]
         result = CatalogAuditEventModel.query().insert(rows).returning().run()
         logger.info("inserted %s event(s) into catalog_audit_events", len(result))
         return cast(list[CatalogAuditEventSelect], result)
