@@ -15,6 +15,7 @@ wheels/
 
 # And permit certain files
 !.env.example
+!.github/workflows/*.yml
 !.gitignore
 !.pre-commit-config.yaml
 !.python-version
