@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block body %}
+<nav id="sidebar" x-data="{ open: null, active: null }">
+  <div class="sidebar-header">
+    <h1>docket</h1>
+    <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+      <span class="moon">🌙</span>
+      <span class="sun">☀️</span>
+    </button>
+  </div>
+  {% for database_name, table_names in tables_by_database.items() %}
+  <div>
+    <button
+      class="accordion-header"
+      @click="open = open === {{ database_name | tojson }} ? null : {{ database_name | tojson }}"
+    >
+      <span>{{ database_name }}</span>
+      <span x-text="open === {{ database_name | tojson }} ? '−' : '+'">+</span>
+    </button>
+    <ul class="accordion-tables" x-show="open === {{ database_name | tojson }}" x-cloak>
+      {% for table_name in table_names %}
+      <li>
+        <a
+          hx-get="/tables/{{ database_name | urlencode }}/{{ table_name | urlencode }}"
+          hx-target="#detail"
+          hx-swap="innerHTML"
+          @click="active = {{ (database_name ~ '.' ~ table_name) | tojson }}"
+          :class="{ active: active === {{ (database_name ~ '.' ~ table_name) | tojson }} }"
+        >{{ table_name }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</nav>
+<main id="detail">
+  <p class="placeholder">Select a table from the sidebar.</p>
+</main>
+{% endblock %}

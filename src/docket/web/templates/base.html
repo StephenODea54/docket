@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>docket</title>
+    <script>
+      try {
+        const theme = localStorage.getItem("docket-theme");
+        if (theme) document.documentElement.dataset.theme = theme;
+      } catch (error) {}
+    </script>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/mermaid.min.js"></script>
+    <script src="/static/app.js" defer></script>
+    <script src="/static/alpine.min.js" defer></script>
+  </head>
+  <body>
+    {% block body %}{% endblock %}
+  </body>
+</html>

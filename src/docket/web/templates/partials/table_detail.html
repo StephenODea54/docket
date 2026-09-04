@@ -1,0 +1,76 @@
+<section class="card">
+  <h2>{{ table.database_name }}.{{ table.name }}</h2>
+  <dl class="metadata">
+    {% if table.description %}
+    <dt>Description</dt>
+    <dd>{{ table.description }}</dd>
+    {% endif %}
+    {% if table.owner %}
+    <dt>Owner</dt>
+    <dd>{{ table.owner }}</dd>
+    {% endif %}
+    {% if table.table_type %}
+    <dt>Type</dt>
+    <dd>{{ table.table_type }}</dd>
+    {% endif %}
+    {% if location %}
+    <dt>Location</dt>
+    <dd>{{ location }}</dd>
+    {% endif %}
+    {% if table.create_time %}
+    <dt>Created</dt>
+    <dd>{{ table.create_time }}</dd>
+    {% endif %}
+    {% if table.update_time %}
+    <dt>Updated</dt>
+    <dd>{{ table.update_time }}</dd>
+    {% endif %}
+    {% if table.last_access_time %}
+    <dt>Last accessed</dt>
+    <dd>{{ table.last_access_time }}</dd>
+    {% endif %}
+  </dl>
+</section>
+
+<section class="card">
+  <h3>Columns</h3>
+  {% if columns or partition_keys %}
+  <table class="columns">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Comment</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for column in columns %}
+      <tr>
+        <td>{{ column.Name }}</td>
+        <td>{{ column.Type }}</td>
+        <td>{{ column.Comment or "" }}</td>
+      </tr>
+      {% endfor %}
+      {% for column in partition_keys %}
+      <tr>
+        <td>{{ column.Name }} (partition)</td>
+        <td>{{ column.Type }}</td>
+        <td>{{ column.Comment or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="placeholder">No column definitions recorded.</p>
+  {% endif %}
+</section>
+
+<section class="card diagram">
+  <h3>ERD</h3>
+  <pre class="mermaid">{{ erd_source }}</pre>
+</section>
+
+<section class="card diagram">
+  <h3>Lineage</h3>
+  <pre class="mermaid">{{ dag_source }}</pre>
+</section>
