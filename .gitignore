@@ -14,11 +14,13 @@ dist/
 wheels/
 
 # And permit certain files
+!.dockerignore
 !.env.example
 !.github/workflows/*.yml
 !.gitignore
 !.pre-commit-config.yaml
 !.python-version
+!Dockerfile
 !LICENSE
 !py.typed
 !uv.lock
