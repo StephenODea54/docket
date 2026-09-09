@@ -286,19 +286,31 @@ def test_serve_missing_db_exits(tmp_path):
     assert "docket run" in result.stderr
 
 
-def test_serve_runs_uvicorn(monkeypatch, tmp_path):
+def test_serve_unknown_adapter_exits(tmp_path):
+    result = runner.invoke(cli.app, ["serve", "--adapter", "carrier-pigeon"])
+    assert result.exit_code == 2
+    assert "uvicorn" in result.stderr
+    assert "lambda" in result.stderr
+
+
+def fake_adapter(calls):
+    class FakeAdapter:
+        def serve(self, app, host, port):
+            calls["app"] = app
+            calls["host"] = host
+            calls["port"] = port
+
+    return FakeAdapter
+
+
+def test_serve_runs_default_adapter(monkeypatch, tmp_path):
     db_file = tmp_path / "docket.db"
     db_file.touch()
+    monkeypatch.delenv("DOCKET_SERVE_ADAPTER", raising=False)
     calls = {}
     monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
     monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
-
-    def fake_run(app, host, port):
-        calls["app"] = app
-        calls["host"] = host
-        calls["port"] = port
-
-    monkeypatch.setattr(cli.uvicorn, "run", fake_run)
+    monkeypatch.setitem(cli.ADAPTERS, "uvicorn", fake_adapter(calls))
 
     result = runner.invoke(
         cli.app,
@@ -317,15 +329,11 @@ def test_serve_reads_env_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("DOCKET_DB_PATH", str(db_file))
     monkeypatch.setenv("DOCKET_SERVE_HOST", "0.0.0.0")
     monkeypatch.setenv("DOCKET_SERVE_PORT", "9100")
+    monkeypatch.setenv("DOCKET_SERVE_ADAPTER", "lambda")
     calls = {}
     monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
     monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
-
-    def fake_run(app, host, port):
-        calls["host"] = host
-        calls["port"] = port
-
-    monkeypatch.setattr(cli.uvicorn, "run", fake_run)
+    monkeypatch.setitem(cli.ADAPTERS, "lambda", fake_adapter(calls))
 
     result = runner.invoke(cli.app, ["serve"])
 

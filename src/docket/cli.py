@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import typer
-import uvicorn
 
 from .audit import find_flagged_deletions, parse_deletion_events
 from .config.env import env
@@ -14,6 +13,7 @@ from .lineage import DependentsReport, collect_dependents, format_report
 from .orchestrator import LlmEdgeExtractor
 from .orchestrator import run as run_pipeline
 from .web import create_app
+from .web.adapters import ADAPTERS
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -184,8 +184,20 @@ def serve(
     host: str | None = None,
     port: int | None = None,
     db_path: str | None = None,
+    adapter: str | None = typer.Option(
+        None,
+        help=f"How to host the app: {' or '.join(ADAPTERS)}. Defaults to uvicorn.",
+    ),
 ) -> None:
     """Serve the catalog browser web UI."""
+    adapter_name = adapter or env.serve_adapter
+    adapter_cls = ADAPTERS.get(adapter_name)
+    if adapter_cls is None:
+        typer.echo(
+            f"unknown adapter {adapter_name!r}; choose from {', '.join(ADAPTERS)}",
+            err=True,
+        )
+        raise typer.Exit(2)
     resolved_host = host or env.serve_host
     resolved_port = port or env.serve_port
     resolved_db_path = db_path or env.db_path
@@ -194,5 +206,4 @@ def serve(
             f"{resolved_db_path} does not exist; run `docket run` first", err=True
         )
         raise typer.Exit(2)
-    db = DB(resolved_db_path)
-    uvicorn.run(create_app(db), host=resolved_host, port=resolved_port)
+    adapter_cls().serve(create_app(DB(resolved_db_path)), resolved_host, resolved_port)

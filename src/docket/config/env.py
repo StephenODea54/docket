@@ -7,6 +7,7 @@ LLM_CONCURRENCY = "DOCKET_LLM_CONCURRENCY"
 LLM_MODEL = "DOCKET_LLM_MODEL"
 LLM_WORKSPACE_ID = "DOCKET_LLM_WORKSPACE_ID"
 LOG_LEVEL = "DOCKET_LOG_LEVEL"
+SERVE_ADAPTER = "DOCKET_SERVE_ADAPTER"
 SERVE_HOST = "DOCKET_SERVE_HOST"
 SERVE_PORT = "DOCKET_SERVE_PORT"
 
@@ -74,6 +75,11 @@ class Env:
         """The upper-cased log level from DOCKET_LOG_LEVEL, or None when unset."""
         value = os.environ.get(LOG_LEVEL, "").upper()
         return value or None
+
+    @property
+    def serve_adapter(self) -> str:
+        """The serve runtime adapter from DOCKET_SERVE_ADAPTER; defaults to uvicorn."""
+        return os.environ.get(SERVE_ADAPTER) or "uvicorn"
 
     @property
     def serve_host(self) -> str:
