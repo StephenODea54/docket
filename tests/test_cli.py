@@ -31,8 +31,9 @@ def test_run_without_model_exits(monkeypatch):
 
 def test_run_invokes_pipeline(monkeypatch):
     monkeypatch.setenv("DOCKET_LLM_MODEL", "test/model")
+    monkeypatch.setenv("DOCKET_DB_PATH", "catalog.db")
     calls = {}
-    monkeypatch.setattr(cli, "DB", lambda: "db")
+    monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
 
     def fake_run(db, extractor):
         calls["db"] = db
@@ -44,10 +45,77 @@ def test_run_invokes_pipeline(monkeypatch):
     result = runner.invoke(cli.app, ["run"])
 
     assert result.exit_code == 0
-    assert calls["db"] == "db"
+    assert calls["db"] == "db:catalog.db"
     assert isinstance(calls["extractor"], LlmEdgeExtractor)
     assert calls["extractor"].model == "test/model"
     assert "re-extracted 2 jobs" in result.output
+
+
+class FakeStore:
+    def __init__(self, location, path, present=True):
+        self.location = location
+        self.path = path
+        self.present = present
+        self.pulled = 0
+        self.pushed = 0
+
+    def pull(self):
+        self.pulled += 1
+        return self.present
+
+    def push(self):
+        self.pushed += 1
+
+
+def use_remote(monkeypatch, path="cache/docket.db", present=True):
+    store = FakeStore("s3://bucket/docket/docket.db", path, present)
+    monkeypatch.setenv("DOCKET_DB_PATH", store.location)
+    monkeypatch.setattr(cli, "catalog_store", lambda location: store)
+    return store
+
+
+def test_run_pulls_then_pushes_remote(monkeypatch):
+    monkeypatch.setenv("DOCKET_LLM_MODEL", "test/model")
+    remote = use_remote(monkeypatch)
+    opened = []
+    monkeypatch.setattr(cli, "DB", lambda db_path: opened.append(db_path))
+    monkeypatch.setattr(cli, "run_pipeline", lambda db, extractor: [])
+
+    result = runner.invoke(cli.app, ["run"])
+
+    assert result.exit_code == 0
+    assert remote.pulled == 1
+    assert opened == [remote.path]
+    assert remote.pushed == 1
+
+
+def test_run_cold_starts_when_remote_missing(monkeypatch):
+    monkeypatch.setenv("DOCKET_LLM_MODEL", "test/model")
+    remote = use_remote(monkeypatch, present=False)
+    monkeypatch.setattr(cli, "DB", lambda db_path: "db")
+    monkeypatch.setattr(cli, "run_pipeline", lambda db, extractor: [])
+
+    result = runner.invoke(cli.app, ["run"])
+
+    assert result.exit_code == 0
+    assert "building from scratch" in result.output
+    assert remote.pushed == 1
+
+
+def test_run_does_not_push_when_pipeline_fails(monkeypatch):
+    monkeypatch.setenv("DOCKET_LLM_MODEL", "test/model")
+    remote = use_remote(monkeypatch)
+    monkeypatch.setattr(cli, "DB", lambda db_path: "db")
+
+    def explode(db, extractor):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "run_pipeline", explode)
+
+    result = runner.invoke(cli.app, ["run"])
+
+    assert result.exit_code == 1
+    assert remote.pushed == 0
 
 
 def make_report(**overrides):
@@ -83,6 +151,34 @@ def test_check_delete_missing_db_exits(tmp_path):
     )
     assert result.exit_code == 2
     assert "docket run" in result.stderr
+
+
+def test_check_delete_pulls_remote_first(monkeypatch, tmp_path):
+    db_file = tmp_path / "docket.db"
+    db_file.touch()
+    remote = use_remote(monkeypatch, path=str(db_file))
+    monkeypatch.setattr(cli, "DB", DummyDB)
+    monkeypatch.setattr(cli, "_collect_dependents", lambda db, d, t: make_report())
+
+    result = runner.invoke(
+        cli.app, ["check-delete", "raw", "orders", "--db-path", remote.location]
+    )
+
+    assert result.exit_code == 0
+    assert remote.pulled == 1
+    assert remote.pushed == 0
+    assert str(db_file) in result.output
+
+
+def test_check_delete_exits_when_remote_missing(monkeypatch):
+    remote = use_remote(monkeypatch, present=False)
+
+    result = runner.invoke(
+        cli.app, ["check-delete", "raw", "orders", "--db-path", remote.location]
+    )
+
+    assert result.exit_code == 2
+    assert remote.location in result.stderr
 
 
 def test_check_delete_clean_exits_zero(monkeypatch, tmp_path):
@@ -242,6 +338,23 @@ def test_audit_clean_run_persists_and_exits_zero(monkeypatch, tmp_path):
     assert AuditDB.audit_log.inserted[0]["flagged"] is False
 
 
+def test_audit_pushes_remote_only_when_events_recorded(monkeypatch, tmp_path):
+    db_file = setup_audit(monkeypatch, tmp_path)
+    remote = use_remote(monkeypatch, path=str(db_file))
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", remote.location])
+
+    assert result.exit_code == 0
+    assert remote.pulled == 1
+    assert remote.pushed == 0
+
+    AuditDB.cloudtrail = FakeCloudtrail([make_cloudtrail_row()])
+    result = runner.invoke(cli.app, ["audit", "--db-path", remote.location])
+
+    assert result.exit_code == 0
+    assert remote.pushed == 1
+
+
 def test_audit_skips_seen_events_unless_all(monkeypatch, tmp_path):
     db_file = setup_audit(
         monkeypatch,
@@ -340,3 +453,18 @@ def test_serve_reads_env_defaults(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert calls["host"] == "0.0.0.0"
     assert calls["port"] == 9100
+
+
+def test_serve_pulls_remote_before_opening(monkeypatch):
+    remote = use_remote(monkeypatch)
+    calls = {}
+    monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
+    monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
+    monkeypatch.setitem(cli.ADAPTERS, "uvicorn", fake_adapter(calls))
+
+    result = runner.invoke(cli.app, ["serve", "--db-path", remote.location])
+
+    assert result.exit_code == 0
+    assert remote.pulled == 1
+    assert remote.pushed == 0
+    assert calls["app"] == f"app:db:{remote.path}"

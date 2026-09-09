@@ -33,7 +33,13 @@ class Env:
 
     @property
     def db_path(self) -> str:
-        """The sqlite database path from DOCKET_DB_PATH; defaults to docket.db."""
+        """
+        Where the catalog lives, from DOCKET_DB_PATH; defaults to docket.db.
+
+        Either a local sqlite path or an s3://bucket/key uri. With s3, every
+        command downloads a local copy first and `docket run` / `docket audit`
+        upload after writing.
+        """
         return os.environ.get(DB_PATH) or "docket.db"
 
     @property

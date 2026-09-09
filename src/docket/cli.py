@@ -2,7 +2,6 @@ import logging
 import os
 import sqlite3
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import typer
 
@@ -12,32 +11,50 @@ from .db import DB
 from .lineage import DependentsReport, collect_dependents, format_report
 from .orchestrator import LlmEdgeExtractor
 from .orchestrator import run as run_pipeline
+from .store import CatalogStoreStrategy, catalog_store
 from .web import create_app
 from .web.adapters import ADAPTERS
 
 app = typer.Typer(no_args_is_help=True)
 
 
-def _open_db(db_path: str | None) -> tuple[DB, str]:
+def _pull_store(db_path: str | None) -> CatalogStoreStrategy:
     """
-    Resolve the db path, require it to exist, and open + migrate.
+    Resolve where the catalog lives and bring it to local disk.
 
     Args:
-        db_path: path to the sqlite file, or None to use DOCKET_DB_PATH
+        db_path: local path or s3:// uri, or None to use DOCKET_DB_PATH
 
     Returns:
-        The open database and the resolved path
+        The store, with its local `path` ready to open
 
     Raises:
-        typer.Exit: with code 2 when the resolved path does not exist
+        typer.Exit: with code 2 when no catalog exists there yet
     """
-    resolved = db_path or env.db_path
-    if not Path(resolved).exists():
-        typer.echo(f"{resolved} does not exist; run `docket run` first", err=True)
+    store = catalog_store(db_path or env.db_path)
+    if not store.pull():
+        typer.echo(f"{store.location} does not exist; run `docket run` first", err=True)
         raise typer.Exit(2)
-    db = DB(resolved)
+    return store
+
+
+def _open_db(db_path: str | None) -> tuple[DB, CatalogStoreStrategy]:
+    """
+    Pull the catalog, then open + migrate it.
+
+    Args:
+        db_path: local path or s3:// uri, or None to use DOCKET_DB_PATH
+
+    Returns:
+        The open database and the store it was pulled from
+
+    Raises:
+        typer.Exit: with code 2 when no catalog exists there yet
+    """
+    store = _pull_store(db_path)
+    db = DB(store.path)
     db.migrate()
-    return db, resolved
+    return db, store
 
 
 def _catalog_age(db_path: str) -> str:
@@ -84,15 +101,19 @@ def run() -> None:
     except ValueError as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(2) from error
-    job_ids = run_pipeline(DB(), extractor)
+    store = catalog_store(env.db_path)
+    if not store.pull():
+        typer.echo(f"no catalog at {store.location}; building from scratch")
+    job_ids = run_pipeline(DB(store.path), extractor)
+    store.push()
     typer.echo(f"re-extracted {len(job_ids)} jobs")
 
 
 @app.command(name="check-delete")
 def check_delete(database: str, table: str, db_path: str | None = None) -> None:
     """Report every job and table that would break if the table were deleted."""
-    db, resolved = _open_db(db_path)
-    typer.echo(_catalog_age(resolved))
+    db, store = _open_db(db_path)
+    typer.echo(_catalog_age(store.path))
     report = _collect_dependents(db, database, table)
     if not report["in_catalog"]:
         typer.echo(
@@ -114,8 +135,8 @@ def audit(
     db_path: str | None = None,
 ) -> None:
     """Audit recent Glue table deletions against the catalog's dependency edges."""
-    db, resolved = _open_db(db_path)
-    typer.echo(_catalog_age(resolved))
+    db, store = _open_db(db_path)
+    typer.echo(_catalog_age(store.path))
     start = datetime.now(UTC) - timedelta(hours=hours)
     cloudtrail = db.clients["aws_cloudtrail_events"]
     try:
@@ -172,6 +193,7 @@ def audit(
         }
         with db.transaction():
             db.clients["catalog_audit_events"].insert_events(list(records.values()))
+        store.push()
     label = "" if show_all else "new "
     typer.echo(f"{len(to_report)} {label}glue deletion(s) in the last {hours}h")
     if findings:
@@ -200,10 +222,5 @@ def serve(
         raise typer.Exit(2)
     resolved_host = host or env.serve_host
     resolved_port = port or env.serve_port
-    resolved_db_path = db_path or env.db_path
-    if not Path(resolved_db_path).exists():
-        typer.echo(
-            f"{resolved_db_path} does not exist; run `docket run` first", err=True
-        )
-        raise typer.Exit(2)
-    adapter_cls().serve(create_app(DB(resolved_db_path)), resolved_host, resolved_port)
+    store = _pull_store(db_path)
+    adapter_cls().serve(create_app(DB(store.path)), resolved_host, resolved_port)
