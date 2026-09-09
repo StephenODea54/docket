@@ -7,13 +7,13 @@ WORKDIR /app
 FROM base AS deps
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,id=uv,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-install-project --no-editable
+    uv sync --locked --no-dev --no-install-project --no-editable --extra lambda
 
 FROM deps AS build
 COPY README.md ./
 COPY src ./src
 RUN --mount=type=cache,id=uv,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-editable
+    uv sync --locked --no-dev --no-editable --extra lambda
 ENV HOME=/opt/docket
 RUN /app/.venv/bin/python -c \
     "from docket.db.db import _download_steampipe_extension; _download_steampipe_extension()"
