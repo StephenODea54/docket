@@ -19,6 +19,9 @@ uv sync
 The Steampipe AWS extension is downloaded and cached automatically on first
 run (under `~/.docket/steampipe/`).
 
+The `lambda` extra (`uv sync --extra lambda`) adds what `docket serve --adapter
+lambda` needs; it only installs on Linux.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill it in. Docket reads standard AWS
@@ -28,14 +31,15 @@ credentials (`AWS_PROFILE`, `AWS_DEFAULT_REGION`, etc.) plus its own
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `DOCKET_AWS_REGIONS` | all regions | Comma-separated regions Steampipe scans. NOTE: Leaving this empty means Steampipe scans ALL regions |
-| `DOCKET_DB_PATH` | `docket.db` | Path to the sqlite catalog file |
+| `DOCKET_DB_PATH` | `docket.db` | Where the catalog lives: a local sqlite path or an `s3://bucket/key` uri. With s3, every command downloads a copy to `~/.docket/cache/` first (`/tmp` when home is read-only, e.g. Lambda); `docket run` uploads on success and `docket audit` uploads after recording new events |
 | `DOCKET_LLM_MODEL` | — | [litellm](https://docs.litellm.ai/) model string, e.g. `anthropic/claude-sonnet-5`; required by `docket run` |
 | `DOCKET_LLM_API_KEY` | — | LLM provider key; omit for providers authenticated elsewhere (e.g. Bedrock via AWS credentials) |
 | `DOCKET_LLM_WORKSPACE_ID` | — | Workspace ID, required only by identity-linked keys |
 | `DOCKET_LLM_CONCURRENCY` | `8` | Parallel extraction calls |
 | `DOCKET_LOG_LEVEL` | — | Log level for the docket namespace |
-| `DOCKET_SERVE_HOST` | `127.0.0.1` | Web UI bind host |
-| `DOCKET_SERVE_PORT` | `8000` | Web UI bind port |
+| `DOCKET_SERVE_ADAPTER` | `uvicorn` | How `docket serve` hosts the app: `uvicorn` or `lambda` |
+| `DOCKET_SERVE_HOST` | `127.0.0.1` | Web UI bind host (uvicorn adapter) |
+| `DOCKET_SERVE_PORT` | `8000` | Web UI bind port (uvicorn adapter) |
 
 `.env` files are loaded at the app edge
 
@@ -64,9 +68,21 @@ as a guard in scripts and CI.
 Queries CloudTrail for recent `DeleteTable` / `BatchDeleteTable` events and
 flags any deleted table that still had dependents in the catalog. `--all` re-reports everything in the window. Exits 1 when a flagged deletion is found.
 
-### `docket serve`
+### `docket serve [--adapter uvicorn|lambda]`
 
 Serves the catalog browser at `http://127.0.0.1:8000`: table search, column search, per-table detail pages with dependents, and an interactive lineage DAG.
+
+The adapter picks how the app is hosted. `uvicorn` binds a socket on
+`DOCKET_SERVE_HOST:DOCKET_SERVE_PORT`. `lambda` wraps the app with
+[Mangum](https://mangum.fastapiexpert.com/) and runs the AWS Lambda Runtime
+Interface Client, so the published container image can be deployed as a Lambda
+function behind API Gateway, an ALB, or a Function URL with no extra layers or
+wrapper scripts (`CMD ["serve", "--adapter", "lambda"]`). It needs the `lambda`
+extra, which the published image includes. Adding a runtime means adding one
+`ServeAdapterStrategy` subclass under `src/docket/web/adapters/`.
+
+With an `s3://` `DOCKET_DB_PATH`, `serve` downloads the catalog once on
+startup. Restart the process to pick up a newer copy.
 
 ## Repository Layout
 
@@ -77,7 +93,11 @@ folder under `src/docket/db/` with its model and client; `db/db.py` exports
 the single `DB` entry point that owns the connection, migrations, and
 transactions. The orchestrator (`src/docket/orchestrator/`) rebuilds the
 catalog and runs the LLM edge extraction; the web app (`src/docket/web/`) and
-CLI (`src/docket/cli.py`) read from the result.
+CLI (`src/docket/cli.py`) read from the result. `src/docket/store/` holds one
+`CatalogStoreStrategy` per place the catalog can live (local disk, s3);
+`catalog_store()` picks one from the `DOCKET_DB_PATH` value so the CLI never
+branches on it. `src/docket/web/adapters/` holds one `ServeAdapterStrategy` per
+way of hosting the web app.
 
 The ORM and migrations come from [sustained](https://sustained.tbmh.org/).
 
