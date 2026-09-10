@@ -367,6 +367,44 @@ def test_audit_writes_report_file(monkeypatch, tmp_path):
     assert "NOT SAFE" in text
 
 
+def test_audit_publishes_report_to_alert_topic(monkeypatch, tmp_path):
+    db_file = setup_audit(
+        monkeypatch, tmp_path, rows=[make_cloudtrail_row()], reports=("orders",)
+    )
+    monkeypatch.setenv("DOCKET_ALERT_TOPIC_ARN", "arn:aws:sns:us-east-2:1:docket")
+    published = []
+    monkeypatch.setattr(
+        cli,
+        "publish_alert",
+        lambda arn, subject, message: published.append((arn, subject, message)),
+    )
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 1
+    arn, subject, message = published[0]
+    assert arn == "arn:aws:sns:us-east-2:1:docket"
+    assert subject == "docket audit: 1 table(s) deleted with dependents"
+    assert "DELETED WITH DEPENDENTS: raw.orders" in message
+
+
+def test_audit_does_not_publish_when_clean_or_unset(monkeypatch, tmp_path):
+    published = []
+    monkeypatch.setattr(cli, "publish_alert", lambda *args: published.append(args))
+
+    monkeypatch.setenv("DOCKET_ALERT_TOPIC_ARN", "arn:aws:sns:us-east-2:1:docket")
+    clean = setup_audit(monkeypatch, tmp_path)
+    assert runner.invoke(cli.app, ["audit", "--db-path", str(clean)]).exit_code == 0
+
+    monkeypatch.delenv("DOCKET_ALERT_TOPIC_ARN")
+    flagged = setup_audit(
+        monkeypatch, tmp_path, rows=[make_cloudtrail_row()], reports=("orders",)
+    )
+    assert runner.invoke(cli.app, ["audit", "--db-path", str(flagged)]).exit_code == 1
+
+    assert published == []
+
+
 def test_audit_report_file_says_clean_when_nothing_flagged(monkeypatch, tmp_path):
     db_file = setup_audit(monkeypatch, tmp_path)
     report = tmp_path / "audit.txt"

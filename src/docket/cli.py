@@ -5,6 +5,7 @@ from pathlib import Path
 
 import typer
 
+from .alerts import publish_alert
 from .audit import (
     find_flagged_deletions,
     format_audit_report,
@@ -176,6 +177,12 @@ def audit(
         Path(report_store.path).parent.mkdir(parents=True, exist_ok=True)
         Path(report_store.path).write_text(report_text)
         report_store.push()
+    if tables and env.alert_topic_arn:
+        publish_alert(
+            env.alert_topic_arn,
+            f"docket audit: {len(tables)} table(s) deleted with dependents",
+            report_text,
+        )
     if new_events:
         flagged = {
             (finding["event"]["event_id"], finding["event"]["table"])

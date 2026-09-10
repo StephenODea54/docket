@@ -1,5 +1,6 @@
 import os
 
+ALERT_TOPIC_ARN = "DOCKET_ALERT_TOPIC_ARN"
 AWS_REGIONS = "DOCKET_AWS_REGIONS"
 DB_PATH = "DOCKET_DB_PATH"
 IGNORE_JOBS = "DOCKET_IGNORE_JOBS"
@@ -33,6 +34,16 @@ class Env:
     Values are read from os.environ on each access, so .env files loaded
     at the app edge and test monkeypatching both take effect.
     """
+
+    @property
+    def alert_topic_arn(self) -> str | None:
+        """
+        SNS topic `docket audit` publishes its report to, from DOCKET_ALERT_TOPIC_ARN.
+
+        Optional; unset means findings are only printed (and written with
+        --report). Subscriptions belong to whoever owns the topic.
+        """
+        return os.environ.get(ALERT_TOPIC_ARN) or None
 
     @property
     def aws_regions(self) -> list[str]:
