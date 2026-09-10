@@ -421,7 +421,7 @@ def test_serve_runs_default_adapter(monkeypatch, tmp_path):
     db_file.touch()
     monkeypatch.delenv("DOCKET_SERVE_ADAPTER", raising=False)
     calls = {}
-    monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
+    monkeypatch.setattr(cli, "DB", lambda db_path, aws: f"db:{db_path}:aws={aws}")
     monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
     monkeypatch.setitem(cli.ADAPTERS, "uvicorn", fake_adapter(calls))
 
@@ -431,7 +431,7 @@ def test_serve_runs_default_adapter(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0
-    assert calls["app"] == f"app:db:{db_file}"
+    assert calls["app"] == f"app:db:{db_file}:aws=False"
     assert calls["host"] == "0.0.0.0"
     assert calls["port"] == 9000
 
@@ -444,7 +444,7 @@ def test_serve_reads_env_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("DOCKET_SERVE_PORT", "9100")
     monkeypatch.setenv("DOCKET_SERVE_ADAPTER", "lambda")
     calls = {}
-    monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
+    monkeypatch.setattr(cli, "DB", lambda db_path, aws: f"db:{db_path}")
     monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
     monkeypatch.setitem(cli.ADAPTERS, "lambda", fake_adapter(calls))
 
@@ -458,7 +458,7 @@ def test_serve_reads_env_defaults(monkeypatch, tmp_path):
 def test_serve_pulls_remote_before_opening(monkeypatch):
     remote = use_remote(monkeypatch)
     calls = {}
-    monkeypatch.setattr(cli, "DB", lambda db_path: f"db:{db_path}")
+    monkeypatch.setattr(cli, "DB", lambda db_path, aws: f"db:{db_path}")
     monkeypatch.setattr(cli, "create_app", lambda db: f"app:{db}")
     monkeypatch.setitem(cli.ADAPTERS, "uvicorn", fake_adapter(calls))
 

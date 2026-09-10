@@ -75,3 +75,17 @@ def test_audit_events_reject_duplicate_event_table(audit_client):
         audit_client.insert_events([make_audit_event()])
     with pytest.raises(sqlite3.IntegrityError), Model.transaction():
         audit_client.insert_events([make_audit_event()])
+
+
+def test_db_opens_plain_sqlite_without_extension(monkeypatch, tmp_path):
+    from docket.db import db as db_module
+
+    def explode():
+        raise AssertionError("steampipe extension must not be touched")
+
+    monkeypatch.setattr(db_module, "_download_steampipe_extension", explode)
+
+    db = db_module.DB(tmp_path / "docket.db", aws=False)
+
+    assert db.migrate()
+    assert db.clients["catalog_tables"].get_tables() == []

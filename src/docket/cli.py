@@ -223,4 +223,6 @@ def serve(
     resolved_host = host or env.serve_host
     resolved_port = port or env.serve_port
     store = _pull_store(db_path)
-    adapter_cls().serve(create_app(DB(store.path)), resolved_host, resolved_port)
+    adapter_cls().serve(
+        create_app(DB(store.path, aws=False)), resolved_host, resolved_port
+    )

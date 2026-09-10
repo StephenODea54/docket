@@ -179,28 +179,31 @@ def _build_aws_config() -> str | None:
     return f"regions = [{rendered}]"
 
 
-def _connect(db_path: str | Path = "docket.db") -> sqlite3.Connection:
+def _connect(db_path: str | Path = "docket.db", aws: bool = True) -> sqlite3.Connection:
     """
-    Open the docket database with the steampipe extension loaded.
+    Open the docket database, loading the steampipe extension when aws is set.
 
     Disables the plugin query cache unless STEAMPIPE_CACHE is already set;
     large results (s3 object bodies) overflow its shards and poison
-    subsequent reads.
+    subsequent reads. Without aws the connection is plain sqlite: only the
+    persisted catalog tables are available and nothing is downloaded.
 
     Args:
         db_path: path to the sqlite file
+        aws: whether to load the steampipe extension for the aws_* tables
 
     Returns:
         sqlite3.Connection
     """
-    extension = _download_steampipe_extension()
-    os.environ.setdefault("STEAMPIPE_CACHE", "false")
     conn = sqlite3.connect(str(db_path))
-    conn.enable_load_extension(True)
-    conn.load_extension(str(extension))
-    conn.enable_load_extension(False)
+    if aws:
+        extension = _download_steampipe_extension()
+        os.environ.setdefault("STEAMPIPE_CACHE", "false")
+        conn.enable_load_extension(True)
+        conn.load_extension(str(extension))
+        conn.enable_load_extension(False)
     conn.execute("pragma foreign_keys = on")
-    config = _build_aws_config()
+    config = _build_aws_config() if aws else None
     if config:
         conn.execute("select steampipe_configure_aws(?)", (config,))
     Model.bind(conn)
@@ -208,9 +211,17 @@ def _connect(db_path: str | Path = "docket.db") -> sqlite3.Connection:
 
 
 class DB:
-    def __init__(self, db_path: str | Path = "docket.db") -> None:
+    def __init__(self, db_path: str | Path = "docket.db", aws: bool = True) -> None:
+        """
+        Open the catalog and build one client per table.
+
+        Args:
+            db_path: path to the sqlite file
+            aws: load the steampipe extension so the aws_* clients work;
+                `docket serve` passes False because it only reads catalog_*
+        """
         regions = env.aws_regions
-        self.conn = _connect(db_path=db_path)
+        self.conn = _connect(db_path=db_path, aws=aws)
         self.clients = {
             "aws_cloudtrail_events": AwsCloudtrailEventClient(self.conn),
             "aws_glue_databases": AwsGlueDatabaseClient(self.conn),
