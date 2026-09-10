@@ -197,3 +197,41 @@ def test_run_drops_orphaned_jobs(conn):
     assert db.clients["catalog_job_extractions"].get_extractions() == []
     assert db.clients["catalog_job_table_edges"].get_edges() == []
     assert db.clients["catalog_job_artifacts"].get_artifacts() == []
+
+
+def test_run_skips_jobs_matching_ignore_regex(conn, monkeypatch):
+    monkeypatch.setenv("DOCKET_IGNORE_JOBS", "Custom.*Deploy")
+    helper = "Stack-CustomCDKBucketDeploymen-abc"
+    db = make_db(conn, job_names=(JOB_NAME, helper))
+    extractor = make_extractor()
+
+    extracted = run(db, extractor)
+
+    jobs = {job["name"]: job["id"] for job in db.clients["catalog_jobs"].get_jobs()}
+    assert set(jobs) == {JOB_NAME, helper}
+    assert extracted == [jobs[JOB_NAME]]
+    assert extractor.calls == 1
+
+
+def test_run_ignores_cdk_helpers_by_default(conn, monkeypatch):
+    monkeypatch.delenv("DOCKET_IGNORE_JOBS", raising=False)
+    helper = "PayloadStack-LogRetentionaae0aa3c5b4d4f87b02d85b20-61CHWoa8be5o"
+    db = make_db(conn, job_names=(JOB_NAME, helper))
+    extractor = make_extractor()
+
+    extracted = run(db, extractor)
+
+    jobs = {job["name"]: job["id"] for job in db.clients["catalog_jobs"].get_jobs()}
+    assert extracted == [jobs[JOB_NAME]]
+
+
+def test_run_empty_ignore_regex_disables_ignoring(conn, monkeypatch):
+    monkeypatch.setenv("DOCKET_IGNORE_JOBS", "")
+    helper = "PayloadStack-LogRetentionaae0aa3c5b4d4f87b02d85b20-61CHWoa8be5o"
+    db = make_db(conn, job_names=(JOB_NAME, helper))
+    extractor = FixtureEdgeExtractor({JOB_NAME: make_edges(), helper: make_edges()})
+
+    extracted = run(db, extractor)
+
+    assert len(extracted) == 2
+    assert extractor.calls == 2

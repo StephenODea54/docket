@@ -1,6 +1,8 @@
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
+from ..config.env import env
 from ..config.logger import get_logger
 from ..db import DB
 from ..db.aws_glue_jobs import AwsGlueJobSelect
@@ -118,13 +120,30 @@ def run(db: DB, extractor: EdgeExtractorStrategy) -> list[str]:
     glue_jobs = db.clients["aws_glue_jobs"].get_jobs()
     lambda_functions = db.clients["aws_lambda_functions"].get_functions()
 
+    ignore = re.compile(env.ignore_jobs) if env.ignore_jobs else None
+    ignored = {
+        record["name"]
+        for record in [*glue_jobs, *lambda_functions]
+        if ignore and ignore.search(record["name"] or "")
+    }
+    if ignored:
+        logger.info(
+            "ignoring %s job(s) matching DOCKET_IGNORE_JOBS: %s",
+            len(ignored),
+            ", ".join(sorted(ignored)),
+        )
+
     glue_scripts = GlueScriptStrategy(db.clients["aws_s3_objects"])
     lambda_packages = LambdaPackageStrategy(db.clients["aws_lambda_functions"])
     sources: dict[JobKey, list[SourceFile]] = {}
     for record in glue_jobs:
-        sources[("glue", record["name"])] = glue_scripts.get_source_files(record)
+        if record["name"] not in ignored:
+            sources[("glue", record["name"])] = glue_scripts.get_source_files(record)
     for record in lambda_functions:
-        sources[("lambda", record["name"])] = lambda_packages.get_source_files(record)
+        if record["name"] not in ignored:
+            sources[("lambda", record["name"])] = lambda_packages.get_source_files(
+                record
+            )
 
     old_keys = {
         job["id"]: _job_key(job) for job in db.clients["catalog_jobs"].get_jobs()
@@ -176,7 +195,11 @@ def run(db: DB, extractor: EdgeExtractorStrategy) -> list[str]:
         if join_edge_rows:
             db.clients["catalog_table_join_edges"].insert_edges(join_edge_rows)
 
-    pairs = [(job, sources.get(_job_key(job), [])) for job in jobs]
+    pairs = [
+        (job, sources.get(_job_key(job), []))
+        for job in jobs
+        if job["name"] not in ignored
+    ]
     return sync_job_edges(
         extractor,
         pairs,

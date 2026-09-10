@@ -2,6 +2,7 @@ import os
 
 AWS_REGIONS = "DOCKET_AWS_REGIONS"
 DB_PATH = "DOCKET_DB_PATH"
+IGNORE_JOBS = "DOCKET_IGNORE_JOBS"
 LLM_API_KEY = "DOCKET_LLM_API_KEY"
 LLM_CONCURRENCY = "DOCKET_LLM_CONCURRENCY"
 LLM_MODEL = "DOCKET_LLM_MODEL"
@@ -10,6 +11,19 @@ LOG_LEVEL = "DOCKET_LOG_LEVEL"
 SERVE_ADAPTER = "DOCKET_SERVE_ADAPTER"
 SERVE_HOST = "DOCKET_SERVE_HOST"
 SERVE_PORT = "DOCKET_SERVE_PORT"
+
+DEFAULT_IGNORE_JOBS = "|".join(
+    [
+        "AWS679f53fac002430cb0da5",
+        "BucketNotificationsHandler",
+        "CustomCDKBucketDeploymen",
+        "CustomDeleteExistingReco",
+        "CustomS3AutoDeleteObjects",
+        "CustomVpcRestrictDefaultSG",
+        "LogRetention",
+        "comamazonawscdkcustomres",
+    ]
+)
 
 
 class Env:
@@ -41,6 +55,20 @@ class Env:
         upload after writing.
         """
         return os.environ.get(DB_PATH) or "docket.db"
+
+    @property
+    def ignore_jobs(self) -> str | None:
+        """
+        Regex for job names `docket run` never sends to the extractor.
+
+        From DOCKET_IGNORE_JOBS. Unset means DEFAULT_IGNORE_JOBS, which
+        matches the helper functions the AWS CDK deploys alongside stacks;
+        an empty value disables ignoring altogether.
+        """
+        value = os.environ.get(IGNORE_JOBS)
+        if value is None:
+            return DEFAULT_IGNORE_JOBS
+        return value or None
 
     @property
     def llm_api_key(self) -> str | None:
