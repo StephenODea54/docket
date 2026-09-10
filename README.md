@@ -32,6 +32,7 @@ credentials (`AWS_PROFILE`, `AWS_DEFAULT_REGION`, etc.) plus its own
 | --- | --- | --- |
 | `DOCKET_AWS_REGIONS` | all regions | Comma-separated regions Steampipe scans. NOTE: Leaving this empty means Steampipe scans ALL regions |
 | `DOCKET_DB_PATH` | `docket.db` | Where the catalog lives: a local sqlite path or an `s3://bucket/key` uri. With s3, every command downloads a copy to `~/.docket/cache/` first (`/tmp` when home is read-only, e.g. Lambda); `docket run` uploads on success and `docket audit` uploads after recording new events |
+| `DOCKET_IGNORE_JOBS` | CDK helpers | Regex of job and function names `docket run` catalogs but never sends to the extractor. Unset matches the helper functions the AWS CDK deploys alongside stacks (`LogRetention`, `BucketNotificationsHandler`, `CustomCDKBucketDeploymen`, ...); set it empty to disable ignoring |
 | `DOCKET_LLM_MODEL` | — | [litellm](https://docs.litellm.ai/) model string, e.g. `anthropic/claude-sonnet-5`; required by `docket run` |
 | `DOCKET_LLM_API_KEY` | — | LLM provider key; omit for providers authenticated elsewhere (e.g. Bedrock via AWS credentials) |
 | `DOCKET_LLM_WORKSPACE_ID` | — | Workspace ID, required only by identity-linked keys |
@@ -54,19 +55,26 @@ uv run --env-file .env docket <command>
 Rebuilds the catalog from AWS and extracts lineage edges. Reads the Glue and
 Lambda inventory, downloads job sources, then truncates and repopulates the
 catalog in one transaction. Extractions are cached by source content, so only
-jobs whose code changed hit the LLM on subsequent runs.
+jobs whose code changed hit the LLM on subsequent runs. Jobs matching
+`DOCKET_IGNORE_JOBS` still appear in the catalog but are never extracted.
 
 ### `docket check-delete DATABASE TABLE`
 
 Reports every job and table that would break if the table were deleted:
 direct readers, tables written by those readers, join references, and the
 transitive blast radius. Exits 1 when the table has dependents, so it works
-as a guard in scripts and CI.
+as a guard in scripts and CI. The first line reports how long ago the catalog
+was last written, read from wherever `DOCKET_DB_PATH` points.
 
-### `docket audit [--hours N] [--all]`
+### `docket audit [--hours N] [--all] [--report PATH]`
 
 Queries CloudTrail for recent `DeleteTable` / `BatchDeleteTable` events and
-flags any deleted table that still had dependents in the catalog. `--all` re-reports everything in the window. Exits 1 when a flagged deletion is found.
+flags any deleted table that still had dependents in the catalog. Findings are
+grouped per table: one block listing every deletion (event name, principal,
+count, time span, regions) followed by the table's dependents report. `--all`
+re-reports everything in the window. `--report` also writes the full report to
+a local path or an `s3://bucket/key` uri, including a "none had dependents"
+report on clean runs. Exits 1 when a flagged deletion is found.
 
 ### `docket serve [--adapter uvicorn|lambda]`
 
@@ -81,8 +89,10 @@ wrapper scripts (`CMD ["serve", "--adapter", "lambda"]`). It needs the `lambda`
 extra, which the published image includes. Adding a runtime means adding one
 `ServeAdapterStrategy` subclass under `src/docket/web/adapters/`.
 
-With an `s3://` `DOCKET_DB_PATH`, `serve` downloads the catalog once on
-startup. Restart the process to pick up a newer copy.
+`serve` opens the catalog as plain sqlite without the Steampipe extension, so
+it needs no AWS credentials beyond what an `s3://` `DOCKET_DB_PATH` requires.
+With an `s3://` path it downloads the catalog once on startup; restart the
+process to pick up a newer copy.
 
 ## Repository Layout
 
