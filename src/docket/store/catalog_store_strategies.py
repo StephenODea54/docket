@@ -239,7 +239,8 @@ class S3CatalogStore(CatalogStoreStrategy):
         Download the remote object over the cache path.
 
         Downloads to a sibling temp file and renames so readers never see a
-        partial file.
+        partial file. The cache directory is created either way so a cold
+        `docket run` can create the sqlite file at `path`.
 
         Args:
             None
@@ -247,12 +248,12 @@ class S3CatalogStore(CatalogStoreStrategy):
         Returns:
             True when downloaded, False when the object does not exist yet
         """
+        target = Path(self.path)
+        target.parent.mkdir(parents=True, exist_ok=True)
         etag = self.head()
         if etag is None:
             logger.info("no catalog at %s", self.location)
             return False
-        target = Path(self.path)
-        target.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as handle:
             temp_path = Path(handle.name)
         try:

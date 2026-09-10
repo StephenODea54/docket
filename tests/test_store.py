@@ -124,6 +124,7 @@ def test_s3_pull_missing_object_returns_false(tmp_path):
 
     assert store.pull() is False
     assert not Path(store.path).exists()
+    assert Path(store.path).parent.is_dir()
     assert store.etag is None
 
 
