@@ -30,6 +30,7 @@ credentials (`AWS_PROFILE`, `AWS_DEFAULT_REGION`, etc.) plus its own
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `DOCKET_ALERT_TOPIC_ARN` | — | SNS topic `docket audit` publishes its report to when a deletion had dependents; unset means findings are only printed and written with `--report` |
 | `DOCKET_AWS_REGIONS` | all regions | Comma-separated regions Steampipe scans. NOTE: Leaving this empty means Steampipe scans ALL regions |
 | `DOCKET_DB_PATH` | `docket.db` | Where the catalog lives: a local sqlite path or an `s3://bucket/key` uri. With s3, every command downloads a copy to `~/.docket/cache/` first (`/tmp` when home is read-only, e.g. Lambda); `docket run` uploads on success and `docket audit` uploads after recording new events |
 | `DOCKET_IGNORE_JOBS` | CDK helpers | Regex of job and function names `docket run` catalogs but never sends to the extractor. Unset matches the helper functions the AWS CDK deploys alongside stacks (`LogRetention`, `BucketNotificationsHandler`, `CustomCDKBucketDeploymen`, ...); set it empty to disable ignoring |
@@ -74,7 +75,10 @@ grouped per table: one block listing every deletion (event name, principal,
 count, time span, regions) followed by the table's dependents report. `--all`
 re-reports everything in the window. `--report` also writes the full report to
 a local path or an `s3://bucket/key` uri, including a "none had dependents"
-report on clean runs. Exits 1 when a flagged deletion is found.
+report on clean runs. With `DOCKET_ALERT_TOPIC_ARN` set, the same report is
+published to that SNS topic whenever something was flagged, so an email or
+chat subscription on the topic gets the alert. Exits 1 when a flagged deletion
+is found.
 
 ### `docket serve [--adapter uvicorn|lambda]`
 
