@@ -1,5 +1,4 @@
 import logging
-import os
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
@@ -57,19 +56,19 @@ def _open_db(db_path: str | None) -> tuple[DB, CatalogStoreStrategy]:
     return db, store
 
 
-def _catalog_age(db_path: str) -> str:
+def _catalog_age(store: CatalogStoreStrategy) -> str:
     """
-    Format how long ago the catalog file was last written.
+    Format how long ago the catalog was last written where it lives.
 
     Args:
-        db_path: path to the sqlite file
+        store: the catalog store, already pulled
 
     Returns:
         The staleness line printed by the check and audit commands
     """
-    modified = datetime.fromtimestamp(os.path.getmtime(db_path), tz=UTC)
+    modified = store.last_modified() or datetime.now(UTC)
     hours = (datetime.now(UTC) - modified).total_seconds() / 3600
-    return f"catalog file last written ~{hours:.1f}h ago ({db_path} mtime)"
+    return f"catalog last written ~{hours:.1f}h ago ({store.location})"
 
 
 def _collect_dependents(db: DB, database: str, table: str) -> DependentsReport:
@@ -113,7 +112,7 @@ def run() -> None:
 def check_delete(database: str, table: str, db_path: str | None = None) -> None:
     """Report every job and table that would break if the table were deleted."""
     db, store = _open_db(db_path)
-    typer.echo(_catalog_age(store.path))
+    typer.echo(_catalog_age(store))
     report = _collect_dependents(db, database, table)
     if not report["in_catalog"]:
         typer.echo(
@@ -136,7 +135,7 @@ def audit(
 ) -> None:
     """Audit recent Glue table deletions against the catalog's dependency edges."""
     db, store = _open_db(db_path)
-    typer.echo(_catalog_age(store.path))
+    typer.echo(_catalog_age(store))
     start = datetime.now(UTC) - timedelta(hours=hours)
     cloudtrail = db.clients["aws_cloudtrail_events"]
     try:

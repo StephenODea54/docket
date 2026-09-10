@@ -1,7 +1,7 @@
 import json
 import sqlite3
 from contextlib import nullcontext
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from typer.testing import CliRunner
 
@@ -65,6 +65,9 @@ class FakeStore:
 
     def push(self):
         self.pushed += 1
+
+    def last_modified(self):
+        return datetime.now(UTC) - timedelta(hours=2)
 
 
 def use_remote(monkeypatch, path="cache/docket.db", present=True):
@@ -167,7 +170,9 @@ def test_check_delete_pulls_remote_first(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert remote.pulled == 1
     assert remote.pushed == 0
-    assert str(db_file) in result.output
+    assert (
+        "catalog last written ~2.0h ago (s3://bucket/docket/docket.db)" in result.output
+    )
 
 
 def test_check_delete_exits_when_remote_missing(monkeypatch):
@@ -192,7 +197,7 @@ def test_check_delete_clean_exits_zero(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0
-    assert "catalog file last written" in result.output
+    assert "catalog last written ~" in result.output
     assert "raw.orders has no dependents" in result.output
 
 

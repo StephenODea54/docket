@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import urlparse
@@ -77,6 +78,20 @@ class CatalogStoreStrategy(ABC):
             True when the local sqlite file exists
         """
         return Path(self.path).exists()
+
+    def last_modified(self) -> datetime | None:
+        """
+        When the catalog at `location` was last written.
+
+        Args:
+            None
+
+        Returns:
+            An aware UTC datetime, or None when no catalog exists there
+        """
+        if not self.exists():
+            return None
+        return datetime.fromtimestamp(os.path.getmtime(self.path), tz=UTC)
 
     def __repr__(self) -> str:
         """Return the strategy name and location, e.g. S3CatalogStore('s3://...')."""
@@ -213,6 +228,27 @@ class S3CatalogStore(CatalogStoreStrategy):
             self._client = boto3.client("s3")
         return self._client
 
+    def _head(self) -> dict[str, Any] | None:
+        """
+        Fetch the remote object's metadata.
+
+        Args:
+            None
+
+        Returns:
+            The HeadObject response, or None when the object does not exist
+
+        Raises:
+            botocore.exceptions.ClientError: for any error other than a
+                missing object (e.g. access denied)
+        """
+        try:
+            return self.client.head_object(Bucket=self.bucket, Key=self.key)
+        except ClientError as error:
+            if error.response["Error"]["Code"] in _MISSING_CODES:
+                return None
+            raise
+
     def head(self) -> str | None:
         """
         Look up the remote object's ETag.
@@ -222,17 +258,25 @@ class S3CatalogStore(CatalogStoreStrategy):
 
         Returns:
             The ETag, or None when the object does not exist
-
-        Raises:
-            botocore.exceptions.ClientError: for any error other than a
-                missing object (e.g. access denied)
         """
-        try:
-            return self.client.head_object(Bucket=self.bucket, Key=self.key)["ETag"]
-        except ClientError as error:
-            if error.response["Error"]["Code"] in _MISSING_CODES:
-                return None
-            raise
+        response = self._head()
+        return response["ETag"] if response else None
+
+    def last_modified(self) -> datetime | None:
+        """
+        When the remote object was last written.
+
+        Args:
+            None
+
+        Returns:
+            The object's LastModified as an aware UTC datetime, or None when
+            it does not exist
+        """
+        response = self._head()
+        if not response:
+            return None
+        return response["LastModified"].astimezone(UTC)
 
     def pull(self) -> bool:
         """

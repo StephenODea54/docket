@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,8 @@ from docket.store import (
     catalog_store,
 )
 from docket.store import catalog_store_strategies as strategies
+
+LAST_MODIFIED = datetime(2026, 9, 9, 20, 30, tzinfo=UTC)
 
 
 class FakeS3:
@@ -26,7 +29,7 @@ class FakeS3:
             raise ClientError(
                 {"Error": {"Code": "404", "Message": "gone"}}, "HeadObject"
             )
-        return {"ETag": self.etag}
+        return {"ETag": self.etag, "LastModified": LAST_MODIFIED}
 
     def download_file(self, Bucket, Key, Filename):
         Path(Filename).write_bytes(self.body)
@@ -151,3 +154,29 @@ def test_s3_push_uploads_cache_file_and_tracks_new_etag(tmp_path):
     assert client.uploads == [(store.path, "bucket", "docket.db")]
     assert client.body == b"new"
     assert store.etag == '"uploaded"'
+
+
+def test_local_last_modified_is_file_mtime(tmp_path):
+    target = tmp_path / "docket.db"
+    store = LocalCatalogStore(str(target))
+
+    assert store.last_modified() is None
+    target.write_bytes(b"sqlite")
+    modified = store.last_modified()
+    assert modified.tzinfo is UTC
+    assert (
+        abs((datetime.now(UTC) - modified).total_seconds())
+        < timedelta(minutes=1).total_seconds()
+    )
+
+
+def test_s3_last_modified_comes_from_head(tmp_path):
+    present = S3CatalogStore(
+        "s3://bucket/docket.db", client=FakeS3(body=b"x"), cache_dir=tmp_path
+    )
+    missing = S3CatalogStore(
+        "s3://bucket/docket.db", client=FakeS3(), cache_dir=tmp_path
+    )
+
+    assert present.last_modified() == LAST_MODIFIED
+    assert missing.last_modified() is None
