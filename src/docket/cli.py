@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import typer
 
@@ -137,6 +138,10 @@ def audit(
         False, "--all", help="Re-report deletions that were already reported."
     ),
     db_path: str | None = None,
+    report: str | None = typer.Option(
+        None,
+        help="Also write the audit report to this local path or s3:// uri.",
+    ),
 ) -> None:
     """Audit recent Glue table deletions against the catalog's dependency edges."""
     db, store = _open_db(db_path)
@@ -166,6 +171,11 @@ def audit(
     report_text = format_audit_report(tables, len(to_report), hours, format_report)
     if tables:
         typer.echo(report_text, err=True, nl=False)
+    if report:
+        report_store = catalog_store(report)
+        Path(report_store.path).parent.mkdir(parents=True, exist_ok=True)
+        Path(report_store.path).write_text(report_text)
+        report_store.push()
     if new_events:
         flagged = {
             (finding["event"]["event_id"], finding["event"]["table"])

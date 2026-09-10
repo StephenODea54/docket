@@ -350,6 +350,35 @@ def test_audit_groups_repeated_deletions_per_table(monkeypatch, tmp_path):
     assert "1 table(s) deleted with dependents" in result.output
 
 
+def test_audit_writes_report_file(monkeypatch, tmp_path):
+    db_file = setup_audit(
+        monkeypatch, tmp_path, rows=[make_cloudtrail_row()], reports=("orders",)
+    )
+    report = tmp_path / "out" / "audit.txt"
+
+    result = runner.invoke(
+        cli.app, ["audit", "--db-path", str(db_file), "--report", str(report)]
+    )
+
+    assert result.exit_code == 1
+    text = report.read_text()
+    assert text.startswith("docket audit: 1 glue deletion(s) in the last 24h")
+    assert "DELETED WITH DEPENDENTS: raw.orders" in text
+    assert "NOT SAFE" in text
+
+
+def test_audit_report_file_says_clean_when_nothing_flagged(monkeypatch, tmp_path):
+    db_file = setup_audit(monkeypatch, tmp_path)
+    report = tmp_path / "audit.txt"
+
+    result = runner.invoke(
+        cli.app, ["audit", "--db-path", str(db_file), "--report", str(report)]
+    )
+
+    assert result.exit_code == 0
+    assert "none had dependents" in report.read_text()
+
+
 def test_audit_clean_run_persists_and_exits_zero(monkeypatch, tmp_path):
     db_file = setup_audit(monkeypatch, tmp_path, rows=[make_cloudtrail_row()])
 
