@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Any, cast
 
 import boto3
 
@@ -17,7 +17,20 @@ class AwsS3ObjectClient:
     """
 
     def __init__(self, region: str | None = None) -> None:
-        self.s3 = boto3.Session().client("s3", region_name=region)
+        self.region = region
+        self._s3: Any | None = None
+
+    @property
+    def s3(self) -> Any:
+        """
+        The boto3 s3 client, created on first use.
+
+        Deferred so opening the catalog without AWS access (`DB(aws=False)`)
+        never needs a region or credentials.
+        """
+        if self._s3 is None:
+            self._s3 = boto3.Session().client("s3", region_name=self.region)
+        return self._s3
 
     def get_object(self, bucket_name: str, key: str) -> AwsS3ObjectSelect | None:
         """

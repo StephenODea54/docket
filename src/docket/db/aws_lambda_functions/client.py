@@ -1,5 +1,5 @@
 import sqlite3
-from typing import cast
+from typing import Any, cast
 
 import boto3
 
@@ -19,7 +19,22 @@ class AwsLambdaFunctionClient:
 
     def __init__(self, conn: sqlite3.Connection, region: str | None = None) -> None:
         self.conn = conn
-        self.lambda_client = boto3.Session().client("lambda", region_name=region)
+        self.region = region
+        self._lambda_client: Any | None = None
+
+    @property
+    def lambda_client(self) -> Any:
+        """
+        The boto3 lambda client, created on first use.
+
+        Deferred so opening the catalog without AWS access (`DB(aws=False)`)
+        never needs a region or credentials.
+        """
+        if self._lambda_client is None:
+            self._lambda_client = boto3.Session().client(
+                "lambda", region_name=self.region
+            )
+        return self._lambda_client
 
     def get_functions(self) -> list[AwsLambdaFunctionSelect]:
         """

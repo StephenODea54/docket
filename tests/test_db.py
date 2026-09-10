@@ -79,11 +79,13 @@ def test_audit_events_reject_duplicate_event_table(audit_client):
 
 def test_db_opens_plain_sqlite_without_extension(monkeypatch, tmp_path):
     from docket.db import db as db_module
+    from docket.db.aws_lambda_functions import client as lambda_module
 
-    def explode():
-        raise AssertionError("steampipe extension must not be touched")
+    def explode(*args, **kwargs):
+        raise AssertionError("neither steampipe nor boto3 may be touched")
 
     monkeypatch.setattr(db_module, "_download_steampipe_extension", explode)
+    monkeypatch.setattr(lambda_module.boto3, "Session", explode)
 
     db = db_module.DB(tmp_path / "docket.db", aws=False)
 
