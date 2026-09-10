@@ -92,7 +92,10 @@ class LambdaPackageStrategy(FileReaderStrategy[AwsLambdaFunctionSelect]):
 
     def _get_location(self, record: AwsLambdaFunctionSelect) -> str | None:
         """
-        Return a function's presigned code download url, if it has one.
+        Return the presigned code download url carried by the record, if any.
+
+        Steampipe plugin versions before v1.32 include it in `code`; later
+        ones do not, and callers fall back to the client's GetFunction.
 
         Args:
             record: lambda function as read from AWS
@@ -130,15 +133,16 @@ class LambdaPackageStrategy(FileReaderStrategy[AwsLambdaFunctionSelect]):
             )
             return []
         name = record["name"]
-        location = self._get_location(record)
+        location = self._get_location(
+            record
+        ) or self.aws_lambda_functions.get_code_location(name)
         if not location:
             logger.warning("function %s has no code location", name)
             return []
         data = self._download(location)
-        if data is None and name:
+        if data is None:
             logger.info("refreshing code location for %s", name)
-            fresh = self.aws_lambda_functions.get_function(name)
-            location = self._get_location(fresh) if fresh else None
+            location = self.aws_lambda_functions.get_code_location(name)
             data = self._download(location) if location else None
         if data is None:
             logger.warning("giving up on %s", name)
