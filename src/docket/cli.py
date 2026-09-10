@@ -4,7 +4,12 @@ from datetime import UTC, datetime, timedelta
 
 import typer
 
-from .audit import find_flagged_deletions, parse_deletion_events
+from .audit import (
+    find_flagged_deletions,
+    format_audit_report,
+    group_findings,
+    parse_deletion_events,
+)
 from .config.env import env
 from .db import DB
 from .lineage import DependentsReport, collect_dependents, format_report
@@ -157,21 +162,10 @@ def audit(
         to_report,
         lambda database, table: _collect_dependents(db, database or "", table),
     )
-    for finding in findings:
-        event = finding["event"]
-        table = (
-            f"{event['database']}.{event['table']}"
-            if event["database"]
-            else event["table"]
-        )
-        typer.echo(
-            f"DELETED WITH DEPENDENTS: {table} ({event['event_name']} by "
-            f"{event['username'] or 'unknown'} at {event['event_time'] or 'unknown'}, "
-            f"{event['region'] or 'unknown'})",
-            err=True,
-        )
-        typer.echo(format_report(finding["report"]), err=True)
-        typer.echo("", err=True)
+    tables = group_findings(findings)
+    report_text = format_audit_report(tables, len(to_report), hours, format_report)
+    if tables:
+        typer.echo(report_text, err=True, nl=False)
     if new_events:
         flagged = {
             (finding["event"]["event_id"], finding["event"]["table"])
@@ -194,8 +188,11 @@ def audit(
             db.clients["catalog_audit_events"].insert_events(list(records.values()))
         store.push()
     label = "" if show_all else "new "
-    typer.echo(f"{len(to_report)} {label}glue deletion(s) in the last {hours}h")
-    if findings:
+    typer.echo(
+        f"{len(to_report)} {label}glue deletion(s) in the last {hours}h, "
+        f"{len(tables)} table(s) deleted with dependents"
+    )
+    if tables:
         raise typer.Exit(1)
     typer.echo("none had dependents")
 

@@ -329,7 +329,25 @@ def test_audit_flags_deletion_with_dependents(monkeypatch, tmp_path):
     assert result.exit_code == 1
     assert "DELETED WITH DEPENDENTS: raw.orders" in result.stderr
     assert "DeleteTable by alice" in result.stderr
+    assert "1 table(s) deleted with dependents" in result.output
     assert AuditDB.audit_log.inserted[0]["flagged"] is True
+
+
+def test_audit_groups_repeated_deletions_per_table(monkeypatch, tmp_path):
+    rows = [
+        make_cloudtrail_row(event_id="evt-1"),
+        make_cloudtrail_row(event_id="evt-2"),
+        make_cloudtrail_row(event_id="evt-3", table="customers"),
+    ]
+    db_file = setup_audit(monkeypatch, tmp_path, rows=rows, reports=("orders",))
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 1
+    assert result.stderr.count("DELETED WITH DEPENDENTS: raw.orders") == 1
+    assert "2 deletion(s): DeleteTable by alice (2)" in result.stderr
+    assert "3 new glue deletion(s)" in result.output
+    assert "1 table(s) deleted with dependents" in result.output
 
 
 def test_audit_clean_run_persists_and_exits_zero(monkeypatch, tmp_path):
