@@ -34,6 +34,7 @@ credentials (`AWS_PROFILE`, `AWS_DEFAULT_REGION`, etc.) plus its own
 | `DOCKET_AWS_REGIONS` | all regions | Comma-separated regions Steampipe scans. NOTE: Leaving this empty means Steampipe scans ALL regions |
 | `DOCKET_DB_PATH` | `docket.db` | Where the catalog lives: a local sqlite path or an `s3://bucket/key` uri. With s3, every command downloads a copy to `~/.docket/cache/` first (`/tmp` when home is read-only, e.g. Lambda); `docket run` uploads on success and `docket audit` uploads after recording new events |
 | `DOCKET_IGNORE_JOBS` | CDK helpers | Regex of job and function names `docket run` catalogs but never sends to the extractor. Unset matches the helper functions the AWS CDK deploys alongside stacks (`LogRetention`, `BucketNotificationsHandler`, `CustomCDKBucketDeploymen`, ...); set it empty to disable ignoring |
+| `DOCKET_IGNORE_TABLES` | — | Regex of table names `docket audit` never reports on, matched against both the bare table name and the `database.table` name. Use it for temp tables that are created and dropped by design (`^tmp_`, `edw_utils\.sf_lead_scd_incoming_staging$`); unset means every deletion is audited |
 | `DOCKET_LLM_MODEL` | — | [litellm](https://docs.litellm.ai/) model string, e.g. `anthropic/claude-sonnet-5`; required by `docket run` |
 | `DOCKET_LLM_API_KEY` | — | LLM provider key; omit for providers authenticated elsewhere (e.g. Bedrock via AWS credentials) |
 | `DOCKET_LLM_WORKSPACE_ID` | — | Workspace ID, required only by identity-linked keys |
@@ -79,6 +80,16 @@ report on clean runs. With `DOCKET_ALERT_TOPIC_ARN` set, the same report is
 published to that SNS topic whenever something was flagged, so an email or
 chat subscription on the topic gets the alert. Exits 1 when a flagged deletion
 is found.
+
+Deletions of tables matching `DOCKET_IGNORE_TABLES` are dropped before anything
+else, so they are never flagged, never counted in the deletion totals, and
+never recorded as seen — clearing the pattern brings them back. The regex is
+matched against both `table` and `database.table`, so it can target one table
+or a whole naming convention:
+
+```bash
+DOCKET_IGNORE_TABLES='^tmp_|^edw_utils\.sf_lead_scd_incoming_staging$'
+```
 
 ### `docket serve [--adapter uvicorn|lambda]`
 
