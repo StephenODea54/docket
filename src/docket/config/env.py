@@ -4,6 +4,7 @@ ALERT_TOPIC_ARN = "DOCKET_ALERT_TOPIC_ARN"
 AWS_REGIONS = "DOCKET_AWS_REGIONS"
 DB_PATH = "DOCKET_DB_PATH"
 IGNORE_JOBS = "DOCKET_IGNORE_JOBS"
+IGNORE_TABLES = "DOCKET_IGNORE_TABLES"
 LLM_API_KEY = "DOCKET_LLM_API_KEY"
 LLM_CONCURRENCY = "DOCKET_LLM_CONCURRENCY"
 LLM_MODEL = "DOCKET_LLM_MODEL"
@@ -80,6 +81,17 @@ class Env:
         if value is None:
             return DEFAULT_IGNORE_JOBS
         return value or None
+
+    @property
+    def ignore_tables(self) -> str | None:
+        """
+        Regex for table names `docket audit` never reports on.
+
+        From DOCKET_IGNORE_TABLES, matched against both the bare table
+        name and the database-qualified name. Unset or empty means every
+        deletion is audited.
+        """
+        return os.environ.get(IGNORE_TABLES) or None
 
     @property
     def llm_api_key(self) -> str | None:

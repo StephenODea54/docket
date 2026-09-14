@@ -11,6 +11,7 @@ from .audit import (
     format_audit_report,
     group_findings,
     parse_deletion_events,
+    split_ignored_deletions,
 )
 from .config.env import env
 from .db import DB
@@ -158,7 +159,15 @@ def audit(
             f"cloudtrail query failed (check AWS credentials): {error}", err=True
         )
         raise typer.Exit(2) from error
-    events = parse_deletion_events(rows)
+    events, ignored = split_ignored_deletions(
+        parse_deletion_events(rows), env.ignore_tables
+    )
+    if ignored:
+        tables_ignored = {(event["database"], event["table"]) for event in ignored}
+        typer.echo(
+            f"ignoring {len(ignored)} deletion(s) of {len(tables_ignored)} "
+            "table(s) matching DOCKET_IGNORE_TABLES"
+        )
     seen = db.clients["catalog_audit_events"].get_event_ids(
         sorted({event["event_id"] for event in events})
     )

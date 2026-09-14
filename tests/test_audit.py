@@ -5,6 +5,7 @@ from docket.audit import (
     format_audit_report,
     group_findings,
     parse_deletion_events,
+    split_ignored_deletions,
 )
 
 
@@ -75,6 +76,60 @@ def test_parse_skips_malformed_rows():
         make_row(event_id=None),
     ]
     assert parse_deletion_events(rows) == []
+
+
+def test_split_ignored_deletions_matches_bare_and_qualified_names():
+    events = parse_deletion_events(
+        [
+            make_row(event_id="evt-1"),
+            make_row(
+                event_id="evt-2",
+                cloud_trail_event=json.dumps(
+                    {
+                        "requestParameters": {
+                            "databaseName": "edw_utils",
+                            "name": "sf_lead_scd_incoming_staging",
+                        }
+                    }
+                ),
+            ),
+            make_row(
+                event_id="evt-3",
+                cloud_trail_event=json.dumps(
+                    {"requestParameters": {"databaseName": "raw", "name": "tmp_abc"}}
+                ),
+            ),
+        ]
+    )
+
+    kept, ignored = split_ignored_deletions(
+        events, r"^tmp_|^edw_utils\.sf_lead_scd_incoming_staging$"
+    )
+
+    assert [event["event_id"] for event in kept] == ["evt-1"]
+    assert [event["event_id"] for event in ignored] == ["evt-2", "evt-3"]
+
+
+def test_split_ignored_deletions_keeps_everything_without_a_pattern():
+    events = parse_deletion_events([make_row()])
+
+    assert split_ignored_deletions(events, None) == (events, [])
+    assert split_ignored_deletions(events, "") == (events, [])
+
+
+def test_split_ignored_deletions_matches_bare_name_without_a_database():
+    events = parse_deletion_events(
+        [
+            make_row(
+                cloud_trail_event=json.dumps({"requestParameters": {"name": "tmp_abc"}})
+            )
+        ]
+    )
+
+    kept, ignored = split_ignored_deletions(events, "^tmp_")
+
+    assert kept == []
+    assert [event["table"] for event in ignored] == ["tmp_abc"]
 
 
 def test_find_flagged_deletions_flags_and_dedupes_collect():

@@ -350,6 +350,43 @@ def test_audit_groups_repeated_deletions_per_table(monkeypatch, tmp_path):
     assert "1 table(s) deleted with dependents" in result.output
 
 
+def test_audit_ignores_tables_matching_pattern(monkeypatch, tmp_path):
+    rows = [
+        make_cloudtrail_row(event_id="evt-1", table="tmp_abc"),
+        make_cloudtrail_row(event_id="evt-2", table="orders"),
+    ]
+    db_file = setup_audit(
+        monkeypatch, tmp_path, rows=rows, reports=("tmp_abc", "orders")
+    )
+    monkeypatch.setenv("DOCKET_IGNORE_TABLES", "^tmp_")
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 1
+    assert "ignoring 1 deletion(s) of 1 table(s)" in result.output
+    assert "1 new glue deletion(s)" in result.output
+    assert "DELETED WITH DEPENDENTS: raw.tmp_abc" not in result.stderr
+    assert "DELETED WITH DEPENDENTS: raw.orders" in result.stderr
+    assert [record["table_name"] for record in AuditDB.audit_log.inserted] == ["orders"]
+
+
+def test_audit_ignoring_every_deletion_exits_zero(monkeypatch, tmp_path):
+    db_file = setup_audit(
+        monkeypatch,
+        tmp_path,
+        rows=[make_cloudtrail_row(table="tmp_abc")],
+        reports=("tmp_abc",),
+    )
+    monkeypatch.setenv("DOCKET_IGNORE_TABLES", "^tmp_")
+
+    result = runner.invoke(cli.app, ["audit", "--db-path", str(db_file)])
+
+    assert result.exit_code == 0
+    assert "0 new glue deletion(s)" in result.output
+    assert "none had dependents" in result.output
+    assert AuditDB.audit_log.inserted == []
+
+
 def test_audit_writes_report_file(monkeypatch, tmp_path):
     db_file = setup_audit(
         monkeypatch, tmp_path, rows=[make_cloudtrail_row()], reports=("orders",)

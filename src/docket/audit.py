@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Callable, Sequence
 from typing import TypedDict
 
@@ -88,6 +89,42 @@ def parse_deletion_events(
         if not found:
             logger.warning("skipping cloudtrail event %s with no tables", event_id)
     return events
+
+
+def split_ignored_deletions(
+    events: Sequence[DeletionEvent], pattern: str | None
+) -> tuple[list[DeletionEvent], list[DeletionEvent]]:
+    """
+    Split deletion events into the ones to audit and the ones to ignore.
+
+    An event is ignored when the regex matches either the bare table name
+    or the database-qualified name, so a pattern can target one table or
+    a whole naming convention. An unset or empty pattern ignores nothing.
+
+    Args:
+        events: deletion events from parse_deletion_events
+        pattern: regex of table names to ignore, or None
+
+    Returns:
+        The events to audit and the events that were ignored
+
+    Raises:
+        re.error: if the pattern is not a valid regular expression
+    """
+    if not pattern:
+        return list(events), []
+    ignore = re.compile(pattern)
+    kept: list[DeletionEvent] = []
+    ignored: list[DeletionEvent] = []
+    for event in events:
+        names = [event["table"]]
+        if event["database"]:
+            names.append(f"{event['database']}.{event['table']}")
+        if any(ignore.search(name) for name in names):
+            ignored.append(event)
+        else:
+            kept.append(event)
+    return kept, ignored
 
 
 def find_flagged_deletions(
