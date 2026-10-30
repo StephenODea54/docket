@@ -192,6 +192,74 @@ def test_databases_backfilled_from_catalog():
     assert report["direct_tables"] == [{"database": "analytics", "table": "summary"}]
 
 
+def test_same_name_in_another_database_is_not_a_dependent():
+    edges = [
+        make_table_edge("job-stg", "orders", "read", database_name="raw"),
+        make_table_edge("job-stg", "orders", "write", database_name="staged"),
+        make_table_edge("job-stg", "invoices", "read", database_name="raw"),
+        make_table_edge("job-stg", "invoices", "write", database_name="staged"),
+    ]
+    get_table_edges, get_job_edges = make_edge_fetchers(edges)
+    report = collect_dependents(
+        "staged",
+        "orders",
+        get_table_edges,
+        get_job_edges,
+        make_join_fetcher([make_join_edge()]),
+        make_jobs_fetcher({"job-stg": "stager", "job-1": "etl"}),
+        make_tables_fetcher([]),
+    )
+
+    assert report["direct_jobs"] == []
+    assert report["direct_tables"] == []
+    assert report["join_refs"] == []
+    assert report["has_dependents"] is False
+
+
+def test_written_table_keeps_its_own_database():
+    edges = [
+        make_table_edge("job-1", "orders", "read"),
+        make_table_edge("job-1", "invoices", "read", database_name="raw"),
+        make_table_edge("job-1", "invoices", "write", database_name="staged"),
+    ]
+    report = collect(edges, jobs={"job-1": "stager"})
+
+    assert report["direct_tables"] == [{"database": "staged", "table": "invoices"}]
+
+
+def test_unknown_database_edge_matches_any_database():
+    edges = [make_table_edge("job-1", "orders", "read", database_name=None)]
+    report = collect(edges, jobs={"job-1": "reporter"})
+
+    assert report["direct_jobs"] == [{"id": "job-1", "label": "glue: reporter"}]
+
+
+def test_join_with_same_name_in_another_database_is_kept():
+    edge = make_join_edge(right_table="orders", right_database="staged")
+    report = collect([], join_edges=[edge], jobs={"job-1": "etl"})
+
+    assert [ref["partner"] for ref in report["join_refs"]] == [
+        {"database": "staged", "table": "orders"}
+    ]
+
+
+def test_ambiguous_catalog_name_is_not_backfilled():
+    edges = [
+        make_table_edge("job-1", "orders", "read"),
+        make_table_edge("job-1", "summary", "write", database_name=None),
+    ]
+    report = collect(
+        edges,
+        jobs={"job-1": "reporter"},
+        tables=[
+            make_table_row("analytics", "summary"),
+            make_table_row("staged", "summary"),
+        ],
+    )
+
+    assert report["direct_tables"] == [{"database": None, "table": "summary"}]
+
+
 def test_empty_graph_has_no_dependents():
     report = collect([])
 
@@ -203,7 +271,7 @@ def test_format_report_lists_sections_and_verdict():
     edges = [
         make_table_edge("job-1", "orders", "read"),
         make_table_edge("job-1", "summary", "write", database_name="analytics"),
-        make_table_edge("job-2", "summary", "read"),
+        make_table_edge("job-2", "summary", "read", database_name="analytics"),
         make_table_edge("job-2", "rollup", "write", database_name="analytics"),
     ]
     report = collect(
